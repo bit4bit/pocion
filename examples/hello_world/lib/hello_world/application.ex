@@ -8,6 +8,19 @@ defmodule HelloWorld.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      {Pocion,
+       [
+         :hello_world,
+         %{
+           width: 640,
+           height: 480,
+           title: "Hello World",
+           opts: [
+             otp_app: :hello_world,
+             pocion_node_path: "../../pocion_node"
+           ]
+         }
+       ]},
       HelloWorld
     ]
 

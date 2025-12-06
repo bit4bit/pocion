@@ -33,7 +33,6 @@ defmodule Pocion.WindowManager do
         raise "can't monitor window #{name}: not linked"
 
       window ->
-        IO.inspect(window)
         monitor_ref = Port.monitor(window.node_port)
         state = put_in(state, [:monitors, monitor_ref], {reply_to, name})
 

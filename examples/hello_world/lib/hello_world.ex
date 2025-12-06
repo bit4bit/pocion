@@ -1,18 +1,4 @@
 defmodule HelloWorld do
-  @moduledoc """
-  Documentation for `HelloWorld`.
-  """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> HelloWorld.hello()
-      :world
-
-  """
-
   use GenServer
 
   def start_link(_) do
@@ -21,35 +7,40 @@ defmodule HelloWorld do
 
   @impl true
   def init(_) do
-    {:ok, w} =
-      Pocion.create_link_window(640, 480, "Hello World",
-        otp_app: :hello_world,
-        pocion_node_path: "../../pocion_node"
-      )
+    winfo = Pocion.info(:hello_world)
 
-    Pocion.call_window(w, fn ->
+    Pocion.call_window(:hello_world, fn ->
       Raylib.set_target_fps(60)
-      Raylib.clear_background(:raywhite)
+    end)
+
+    tick()
+    {:ok, %{x: 0, y: 100, y_delta: 1, height: winfo.height}}
+  end
+
+  @impl true
+  def handle_info(:tick, state) do
+    tick()
+
+    Pocion.call_window(:hello_world, fn ->
       Raylib.begin_drawing()
-      Raylib.draw_text("Hello World!", 190, 200, 20, :lightgray)
+      Raylib.clear_background(:raywhite)
+      Raylib.draw_text("Hello World!", 190, state.y, 20, :lightgray)
       Raylib.end_drawing()
     end)
 
-    {:ok, w2} =
-      Pocion.create_link_window(640, 480, "Hello World",
-        otp_app: :hello_world,
-        pocion_node_path: "../../pocion_node"
-      )
+    y_next = state.y + state.y_delta
 
-    Pocion.call_window(w2, fn ->
-      Raylib.set_target_fps(60)
-      Raylib.clear_background(:raywhite)
-      Raylib.begin_drawing()
-      Raylib.draw_text("Hello World!", 190, 200, 20, :lightgray)
-      Raylib.end_drawing()
-    end)
+    y_delta =
+      if y_next + 100 > state.height or y_next - 100 <= 0 do
+        state.y_delta * -1
+      else
+        state.y_delta
+      end
 
-    Process.sleep(5000)
-    {:ok, nil}
+    {:noreply, %{state | y: y_next, y_delta: y_delta}}
+  end
+
+  defp tick do
+    Process.send_after(self(), :tick, 10)
   end
 end

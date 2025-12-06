@@ -22,6 +22,7 @@ defmodule PocionNode.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:private_module, "~> 0.1"},
       {:raylib, "~> 0.0", path: "../raylib"},
       {:pocion, "~> 0.0", path: "../pocion"}
     ]

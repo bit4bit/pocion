@@ -1,35 +1,94 @@
 defmodule Pocion do
   @moduledoc """
   """
-  defstruct [:root_node, :node, :node_port]
+
+  use GenServer
+
+  def start_link([name, %{width: _width, height: _height, title: _title, opts: _opts} = args]) do
+    GenServer.start_link(__MODULE__, args, name: name)
+  end
+
+  def call_window(name, func) do
+    GenServer.call(name, {:call_window, func})
+  end
+
+  @spec info(GenServer.server()) :: Pocion.Window.Information.t()
+  def info(name) do
+    GenServer.call(name, :info)
+  end
+
+  @impl true
+  def init(args) do
+    {:ok, w} = Pocion.Window.create_link_window(args.width, args.height, args.title, args.opts)
+    {:ok, w}
+  end
+
+  @impl true
+  def handle_call({:call_window, func}, _from, w) do
+    result = Pocion.Window.call_window(w, func)
+    {:reply, result, w}
+  end
+
+  def handle_call(:info, _from, w) do
+    {:reply, Pocion.Window.info(w), w}
+  end
+
+  @impl true
+  def terminate(_reason, w) do
+    Pocion.Window.close_window(w)
+    :normal
+  end
+end
+
+defmodule Pocion.Window do
+  @moduledoc false
+
+  defstruct [:root_node, :node, :node_port, :info]
+
+  defmodule Information do
+    @type t :: %__MODULE__{}
+
+    defstruct [:width, :height, :title]
+  end
 
   def create_link_window(width, height, title, opts \\ []) do
     {root_node, domain} = start_root_node()
+
     pocion_node_path = Keyword.get(opts, :pocion_node_path, "../pocion_node")
     otp_app = Keyword.get(opts, :otp_app, Application.get_application(__MODULE__))
 
     callback_pid = self_as_callback(node_name(domain))
-    
-    case start_raylib_node({callback_pid, root_node}, node_name(domain), [pocion_node_path: pocion_node_path, app_beams: lookup_app_beams(otp_app)]) do
-      {:ok, node, node_port} ->
-        self = %__MODULE__{node: node, node_port: node_port, root_node: root_node}
+
+    case start_raylib_node({callback_pid, root_node}, node_name(domain),
+           pocion_node_path: pocion_node_path,
+           app_beams: lookup_app_beams(otp_app)
+         ) do
+           {:ok, node, node_port} ->
+             info = %Information{width: width, height: height, title: title}
+             self = %__MODULE__{node: node, node_port: node_port, root_node: root_node, info: info}
         :ok = raylib(self, :init_window, [width, height, title])
         {:ok, self}
     end
   end
 
+  def info(%__MODULE__{info: info}), do: info
+
   def call_window(%__MODULE__{node: node}, func) do
     parent_pid = self()
     parent_ref = make_ref()
 
-    {remote_pid, remote_ref} = Node.spawn_monitor(node, fn ->
-      result = func.()
-      send(parent_pid, {:reply, parent_ref, result})
-    end)
+    {remote_pid, remote_ref} =
+      Node.spawn_monitor(node, fn ->
+        result = func.()
+        send(parent_pid, {:reply, parent_ref, result})
+      end)
 
     receive do
       {:reply, ^parent_ref, result} ->
+        Process.demonitor(remote_ref, [:flush])
+
         result
+
       {:DOWN, ^remote_ref, :process, ^remote_pid, reason} ->
         raise inspect(reason)
     after
@@ -59,6 +118,7 @@ defmodule Pocion do
     elixir_path = System.find_executable("elixir")
 
     args = node_args(setup_node(root_node, node, app_beams))
+
     port =
       Port.open({:spawn_executable, elixir_path}, [
         :stderr_to_stdout,
@@ -77,12 +137,12 @@ defmodule Pocion do
     loop = fn loop ->
       receive do
         {:node_started, init_ref, node, node_pid} ->
-          IO.inspect("node started #{node}")
+          IO.puts("node started #{node}")
           send(node_pid, {:node_initialized, init_ref})
           {:ok, node, port}
 
         {^port, {:data, data}} ->
-          IO.inspect(data)
+          IO.puts(data)
           loop.(loop)
 
         {:DOWN, ^port_ref, :port, _, reason} ->
@@ -116,7 +176,12 @@ defmodule Pocion do
   end
 
   defp setup_node({root_pid, root_node}, current_node, app_beams) do
-    quote bind_quoted: [root_pid: root_pid, root_node: root_node, current_node: current_node, app_beams: app_beams] do
+    quote bind_quoted: [
+            root_pid: root_pid,
+            root_node: root_node,
+            current_node: current_node,
+            app_beams: app_beams
+          ] do
       Code.prepend_paths(app_beams)
       {:ok, _} = Node.start(current_node, name_domain: :shortnames, hidden: true)
       Process.register(self(), :pocion)
@@ -165,7 +230,7 @@ defmodule Pocion do
       {:ok, _node_pid} ->
         [_name, domain] = Node.self() |> to_string() |> String.split("@", parts: 2)
         {Node.self(), domain}
-      
+
       {:error, {:already_started, _}} ->
         [_name, domain] = Node.self() |> to_string() |> String.split("@", parts: 2)
         {Node.self(), domain}

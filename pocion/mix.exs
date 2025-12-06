@@ -28,6 +28,6 @@ defmodule Pocion.MixProject do
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
-    []
+    [{:private_module, "~> 0.1"}]
   end
 end

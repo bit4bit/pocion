@@ -53,7 +53,8 @@ fn cast_color(icolor: beam.term) !ray.Color {
 
 // hack: [*c]const u8 in signature is not working
 fn ray_string(text: beam.term) ![*c]const u8 {
-    const text_slice = try beam.get([]const u8, text, .{});
+    const text_slice = try beam.get([]u8, text, .{});
+    defer beam.allocator.free(text_slice);
     const null_terminated = try beam.allocator.alloc(u8, text_slice.len + 1);
     @memcpy(null_terminated[0..text_slice.len], text_slice);
     null_terminated[text_slice.len] = 0;

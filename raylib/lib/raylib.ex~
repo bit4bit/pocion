@@ -8,14 +8,18 @@ defmodule Raylib do
     c: [include_dirs: "/usr/local/include", link_lib: {:system, "raylib"}]
 
   ~Z"""
+  const std = @import("std");
+
   const ray = @cImport({
       @cInclude("raylib.h");
   });
 
   const beam = @import("beam");
 
-  pub fn init_window(width: i32, height: i32, title: [*]const u8) beam.term {
-      ray.InitWindow(width, height, title);
+  pub fn init_window(width: i32, height: i32, title: beam.term) !beam.term {
+      const ctitle = try ray_string(title);
+      defer beam.allocator.free(ctitle[0..std.mem.len(ctitle)]);
+      ray.InitWindow(width, height, ctitle);
       return beam.make(.ok, .{});
   }
 
@@ -33,14 +37,39 @@ defmodule Raylib do
       return beam.make(.ok, .{});
   }
 
+  pub fn clear_background(icolor: beam.term) !void {
+      ray.ClearBackground(try cast_color(icolor));
+  }
+
   pub fn end_drawing() beam.term {
       ray.EndDrawing();
       return beam.make(.ok, .{});
   }
-  const ColorType = enum { lightgray };
 
-  pub fn draw_text(text: [*]const u8, pos_x: i32, pos_y: i32, font_size: i32, icolor: beam.term) !beam.term {
-      ray.DrawText(text, pos_x, pos_y, font_size, cast_color(color));
+  const ColorType = enum { lightgray, raywhite };
+
+  fn cast_color(icolor: beam.term) !ray.Color {
+      const zcolor = try beam.get(ColorType, icolor, .{});
+      return switch (zcolor) {
+          .lightgray => ray.LIGHTGRAY,
+          .raywhite => ray.RAYWHITE,
+      };
+  }
+
+  // hack: [*c]const u8 in signature is not working
+  fn ray_string(text: beam.term) ![*c]const u8 {
+      const text_slice = try beam.get([]u8, text, .{});
+      const null_terminated = try beam.allocator.alloc(u8, text_slice.len + 1);
+      @memcpy(null_terminated[0..text_slice.len], text_slice);
+      beam.allocator.free(text_slice);
+      null_terminated[text_slice.len] = 0;
+      return null_terminated.ptr;
+  }
+
+  pub fn draw_text(text: beam.term, pos_x: i32, pos_y: i32, font_size: i32, icolor: beam.term) !beam.term {
+      const ctext = try ray_string(text);
+      defer beam.allocator.free(ctext[0..std.mem.len(ctext)]);
+      ray.DrawText(ctext, pos_x, pos_y, font_size, try cast_color(icolor));
 
       return beam.make(.ok, .{});
   }
@@ -48,14 +77,6 @@ defmodule Raylib do
   pub fn close_window() beam.term {
       ray.CloseWindow();
       return beam.make(.ok, .{});
-  }
-
-  fn cast_color(icolor: beam.term) !ray.Color {
-      const zcolor = try beam.get(ColorType, icolor, .{});
-      const zcolor = try beam.get(ColorType, icolor, .{});
-      return switch (zcolor) {
-          .lightgray => ray.LIGHTGRAY,
-      };
   }
   """
 end

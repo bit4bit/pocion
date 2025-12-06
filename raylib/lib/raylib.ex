@@ -5,17 +5,24 @@ defmodule Raylib do
 
   use Zig,
     otp_app: :raylib,
+    leak_check: true,
     c: [include_dirs: "/usr/local/include", link_lib: {:system, "raylib"}]
 
   ~Z"""
+  const std = @import("std");
+
   const ray = @cImport({
       @cInclude("raylib.h");
   });
 
   const beam = @import("beam");
 
-  pub fn init_window(width: i32, height: i32, title: [*c]const u8) beam.term {
-      ray.InitWindow(width, height, title);
+  pub fn init_window(width: i32, height: i32, title: beam.term) !beam.term {
+      const ctitle = try ray_string(title);
+      defer beam.allocator.free(ctitle[0..std.mem.len(ctitle)]);
+
+      ray.InitWindow(width, height, ctitle);
+
       return beam.make(.ok, .{});
   }
 
@@ -52,8 +59,39 @@ defmodule Raylib do
       };
   }
 
-  pub fn draw_text(text: [*]const u8, pos_x: i32, pos_y: i32, font_size: i32, icolor: beam.term) !beam.term {
-      ray.DrawText(text, pos_x, pos_y, font_size, try cast_color(icolor));
+  // hack: [*c]const u8 in signature is not working
+  fn ray_string(text: beam.term) ![*c]const u8 {
+      const text_slice = try beam.get([]const u8, text, .{});
+      const null_terminated = try beam.allocator.alloc(u8, text_slice.len + 1);
+      @memcpy(null_terminated[0..text_slice.len], text_slice);
+      null_terminated[text_slice.len] = 0;
+      return null_terminated.ptr;
+  }
+
+  pub fn draw_text(text: beam.term, pos_x: i32, pos_y: i32, font_size: i32, icolor: beam.term) !beam.term {
+      const ctext = try ray_string(text);
+      defer beam.allocator.free(ctext[0..std.mem.len(ctext)]);
+      ray.DrawText(ctext, pos_x, pos_y, font_size, try cast_color(icolor));
+
+      return beam.make(.ok, .{});
+  }
+
+  pub fn draw_fps(pos_x: i32, pos_y: i32) beam.term {
+      ray.DrawFPS(pos_x, pos_y);
+      return beam.make(.ok, .{});
+  }
+
+  const LogLevelType = enum { log_debug, log_info, log_error };
+
+  pub fn set_trace_log_level(ilog_level: beam.term) !beam.term {
+      const zlevel = try beam.get(LogLevelType, ilog_level, .{});
+      const level = switch (zlevel) {
+          .log_info => ray.LOG_INFO,
+          .log_debug => ray.LOG_DEBUG,
+          .log_error => ray.LOG_ERROR,
+      };
+
+      ray.SetTraceLogLevel(level);
 
       return beam.make(.ok, .{});
   }

@@ -1,4 +1,3 @@
-
 defmodule Pocion.Window do
   @moduledoc false
 
@@ -20,9 +19,9 @@ defmodule Pocion.Window do
     case start_raylib_node({callback_pid, root_node}, node_name(domain),
            app_beams: lookup_app_beams(otp_app)
          ) do
-           {:ok, node, node_port} ->
-             info = %Information{width: width, height: height, title: title}
-             self = %__MODULE__{node: node, node_port: node_port, root_node: root_node, info: info}
+      {:ok, node, node_port} ->
+        info = %Information{width: width, height: height, title: title}
+        self = %__MODULE__{node: node, node_port: node_port, root_node: root_node, info: info}
         :ok = raylib(self, :init_window, [width, height, title])
         {:ok, self}
     end
@@ -77,9 +76,9 @@ defmodule Pocion.Window do
 
     port =
       Port.open({:spawn_executable, elixir_path}, [
-        :stderr_to_stdout,
-        :use_stdio,
+        :nouse_stdio,
         :binary,
+        :hide,
         env: [{~c"POCION_ROOT_NODE", ~c"1"}],
         args: args
       ])
@@ -125,6 +124,7 @@ defmodule Pocion.Window do
 
   defp lookup_app_beams(app) do
     apps = [:raylib, :pocion, app]
+
     Enum.flat_map(apps, fn app ->
       app_dir = Application.app_dir(app)
       [Path.join(app_dir, "consolidated"), Path.join(app_dir, "ebin")]
@@ -186,7 +186,7 @@ defmodule Pocion.Window do
       {:ok, _node_pid} ->
         [_name, domain] = Node.self() |> to_string() |> String.split("@", parts: 2)
         {Node.self(), domain}
-          
+
       {:error, {:already_started, _}} ->
         [_name, domain] = Node.self() |> to_string() |> String.split("@", parts: 2)
         {Node.self(), domain}

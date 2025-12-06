@@ -10,7 +10,8 @@ defmodule HelloWorld do
     winfo = Pocion.info(:hello_world)
 
     Pocion.call_window(:hello_world, fn ->
-      Raylib.set_target_fps(60)
+      Raylib.set_target_fps(0)
+      Raylib.set_trace_log_level(:log_debug)
     end)
 
     tick()
@@ -25,6 +26,7 @@ defmodule HelloWorld do
       Raylib.begin_drawing()
       Raylib.clear_background(:raywhite)
       Raylib.draw_text("Hello World!", 190, state.y, 20, :lightgray)
+      Raylib.draw_fps(10, 10)
       Raylib.end_drawing()
     end)
 

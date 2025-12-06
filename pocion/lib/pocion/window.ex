@@ -76,9 +76,9 @@ defmodule Pocion.Window do
 
     port =
       Port.open({:spawn_executable, elixir_path}, [
-        :stderr_to_stdout,
-        :use_stdio,
+        :nouse_stdio,
         :binary,
+        :hide,
         env: [{~c"POCION_ROOT_NODE", ~c"1"}],
         args: args
       ])
@@ -114,7 +114,7 @@ defmodule Pocion.Window do
   defp node_args(boot_script) do
     [
       "--erl",
-      "-noinput",
+      "--disable-jit -noinput",
       "--hidden",
       "--eval",
       "System.argv() |> hd() |> Base.decode64!() |> Code.eval_string()",

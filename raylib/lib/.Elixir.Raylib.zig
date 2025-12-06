@@ -26,11 +26,24 @@ pub fn begin_drawing() beam.term {
     return beam.make(.ok, .{});
 }
 
+pub fn clear_background(icolor: beam.term) !void {
+ray.ClearBackground(try cast_color(icolor));
+}
+
 pub fn end_drawing() beam.term {
     ray.EndDrawing();
     return beam.make(.ok, .{});
 }
-const ColorType = enum { lightgray };
+
+const ColorType = enum { lightgray, raywhite };
+
+fn cast_color(icolor: beam.term) !ray.Color {
+    const zcolor = try beam.get(ColorType, icolor, .{});
+    return switch (zcolor) {
+        .lightgray => ray.LIGHTGRAY,
+.raywhite => ray.RAYWHITE
+    };
+}
 
 pub fn draw_text(text: [*]const u8, pos_x: i32, pos_y: i32, font_size: i32, icolor: beam.term) !beam.term {
     ray.DrawText(text, pos_x, pos_y, font_size, try cast_color(icolor));
@@ -43,9 +56,3 @@ pub fn close_window() beam.term {
     return beam.make(.ok, .{});
 }
 
-fn cast_color(icolor: beam.term) !ray.Color {
-    const zcolor = try beam.get(ColorType, icolor, .{});
-    return switch (zcolor) {
-        .lightgray => ray.LIGHTGRAY,
-    };
-}

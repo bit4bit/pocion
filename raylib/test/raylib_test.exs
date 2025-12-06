@@ -6,6 +6,7 @@ defmodule RaylibTest do
     assert Raylib.set_target_fps(60) == :ok
     assert Raylib.window_should_close() == false
     assert Raylib.begin_drawing() == :ok
+    assert Raylib.clear_background(:raywhite)
     assert Raylib.draw_text("hola", 190, 200, 20, :lightgray)
     assert Raylib.end_drawing() == :ok
     assert Raylib.close_window() == :ok

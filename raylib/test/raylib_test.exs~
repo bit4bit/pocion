@@ -2,7 +2,12 @@ defmodule RaylibTest do
   use ExUnit.Case
 
   test "basics" do
-    assert :ok = Raylib.init_window(%{width: 640, height: 480, title: "jeje"})
-    assert :ok = Raylib.close_window()
+    assert Raylib.init_window(640, 480, "jeje") == :ok
+    assert Raylib.set_target_fps(60) == :ok
+    assert Raylib.window_should_close() == false
+    assert Raylib.begin_drawing() == :ok
+    assert Raylib.draw_text("hola", 190, 200, 20, :lightgray)
+    assert Raylib.end_drawing() == :ok
+    assert Raylib.close_window() == :ok
   end
 end

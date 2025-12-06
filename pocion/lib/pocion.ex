@@ -1,15 +1,16 @@
 defmodule Pocion do
   @moduledoc """
   """
-
   defstruct [:root_node, :node, :node_port]
 
-  def create_link_window(width, height, title) do
+  def create_link_window(width, height, title, opts \\ []) do
     {root_node, domain} = start_root_node()
+    pocion_node_path = Keyword.get(opts, :pocion_node_path, "../pocion_node")
+    otp_app = Keyword.get(opts, :otp_app, Application.get_application(__MODULE__))
 
     callback_pid = self_as_callback(node_name(domain))
-
-    case start_raylib_node({callback_pid, root_node}, node_name(domain)) do
+    
+    case start_raylib_node({callback_pid, root_node}, node_name(domain), [pocion_node_path: pocion_node_path, app_beams: lookup_app_beams(otp_app)]) do
       {:ok, node, node_port} ->
         self = %__MODULE__{node: node, node_port: node_port, root_node: root_node}
         :ok = raylib(self, :init_window, [width, height, title])
@@ -18,9 +19,17 @@ defmodule Pocion do
   end
 
   def call_window(%__MODULE__{node: node}, func) do
-    {remote_pid, remote_ref} = Node.spawn_monitor(node, func)
+    parent_pid = self()
+    parent_ref = make_ref()
+
+    {remote_pid, remote_ref} = Node.spawn_monitor(node, fn ->
+      result = func.()
+      send(parent_pid, {:reply, parent_ref, result})
+    end)
 
     receive do
+      {:reply, ^parent_ref, result} ->
+        result
       {:DOWN, ^remote_ref, :process, ^remote_pid, reason} ->
         raise inspect(reason)
     after
@@ -44,16 +53,19 @@ defmodule Pocion do
     end
   end
 
-  defp start_raylib_node(root_node, node) do
+  defp start_raylib_node(root_node, node, opts) do
+    pocion_node_path = Keyword.fetch!(opts, :pocion_node_path)
+    app_beams = Keyword.fetch!(opts, :app_beams)
     elixir_path = System.find_executable("elixir")
 
+    args = node_args(setup_node(root_node, node, app_beams))
     port =
       Port.open({:spawn_executable, elixir_path}, [
         :stderr_to_stdout,
         :use_stdio,
         :binary,
-        cd: "../pocion_node",
-        args: node_args(root_node, node)
+        cd: pocion_node_path,
+        args: args
       ])
 
     wait_node_started(port)
@@ -84,7 +96,7 @@ defmodule Pocion do
     loop.(loop)
   end
 
-  defp node_args(root_node, node) do
+  defp node_args(boot_script) do
     [
       "--erl",
       "-noinput",
@@ -94,12 +106,18 @@ defmodule Pocion do
       "run",
       "--eval",
       "System.argv() |> hd() |> Base.decode64!() |> Code.eval_string()",
-      setup_node(root_node, node)
+      boot_script
     ]
   end
 
-  defp setup_node({root_pid, root_node}, current_node) do
-    quote bind_quoted: [root_pid: root_pid, root_node: root_node, current_node: current_node] do
+  defp lookup_app_beams(app) do
+    app_dir = Application.app_dir(app)
+    [Path.join(app_dir, "consolidated"), Path.join(app_dir, "ebin")]
+  end
+
+  defp setup_node({root_pid, root_node}, current_node, app_beams) do
+    quote bind_quoted: [root_pid: root_pid, root_node: root_node, current_node: current_node, app_beams: app_beams] do
+      Code.prepend_paths(app_beams)
       {:ok, _} = Node.start(current_node, name_domain: :shortnames, hidden: true)
       Process.register(self(), :pocion)
       true = Node.connect(root_node)
@@ -147,7 +165,7 @@ defmodule Pocion do
       {:ok, _node_pid} ->
         [_name, domain] = Node.self() |> to_string() |> String.split("@", parts: 2)
         {Node.self(), domain}
-
+      
       {:error, {:already_started, _}} ->
         [_name, domain] = Node.self() |> to_string() |> String.split("@", parts: 2)
         {Node.self(), domain}

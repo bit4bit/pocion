@@ -17,6 +17,17 @@ defmodule Pocion do
     end
   end
 
+  def call_window(%__MODULE__{node: node}, func) do
+    {remote_pid, remote_ref} = Node.spawn_monitor(node, func)
+
+    receive do
+      {:DOWN, ^remote_ref, :process, ^remote_pid, reason} ->
+        raise inspect(reason)
+    after
+      10000 -> exit(:timeout)
+    end
+  end
+
   def close_window(%__MODULE__{} = self) do
     :ok = raylib(self, :close_window, [])
     halt(self)
@@ -41,6 +52,7 @@ defmodule Pocion do
         :stderr_to_stdout,
         :use_stdio,
         :binary,
+        cd: "../pocion_node",
         args: node_args(root_node, node)
       ])
 
@@ -77,6 +89,9 @@ defmodule Pocion do
       "--erl",
       "-noinput",
       "--hidden",
+      "-S",
+      "mix",
+      "run",
       "--eval",
       "System.argv() |> hd() |> Base.decode64!() |> Code.eval_string()",
       setup_node(root_node, node)
@@ -85,7 +100,6 @@ defmodule Pocion do
 
   defp setup_node({root_pid, root_node}, current_node) do
     quote bind_quoted: [root_pid: root_pid, root_node: root_node, current_node: current_node] do
-      Mix.install([{:raylib, "~> 0.0", path: "../raylib"}])
       {:ok, _} = Node.start(current_node, name_domain: :shortnames, hidden: true)
       Process.register(self(), :pocion)
       true = Node.connect(root_node)

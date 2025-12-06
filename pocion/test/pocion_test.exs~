@@ -6,31 +6,31 @@ defmodule PocionTest do
     %{wm: wm}
   end
 
-  test "single window", %{wm: wm} do
-    assert {:ok, w} = Pocion.create_link_window(wm, :test1, 640, 480, "test1")
+  test "single window" do
+    assert {:ok, w} = Pocion.create_link_window(640, 480, "test1")
     Pocion.close_window(w)
   end
 
-  test "multi window", %{wm: wm} do
-    assert {:ok, w} = Pocion.create_link_window(wm, :test2, 640, 480, "test2")
-    assert {:ok, w2} = Pocion.create_link_window(wm, :test3, 320, 240, "test3")
+  test "multi window" do
+    assert {:ok, w} = Pocion.create_link_window(640, 480, "test2")
+    assert {:ok, w2} = Pocion.create_link_window(320, 240, "test3")
     Pocion.close_window(w)
     Pocion.close_window(w2)
   end
 
-  # TODO: how to test it?
   test "when root dies windows die", %{wm: wm} do
     test_pid = self()
 
     pid =
       spawn(fn ->
-        {:ok, _} = Pocion.create_link_window(wm, :die, 640, 480, "die")
+        {:ok, w} = Pocion.create_link_window(640, 480, "die")
+        :ok = Pocion.WindowManager.register(wm, w, :die)
         send(test_pid, :started)
       end)
 
     assert_receive :started, 30000
     monitor_ref = Pocion.WindowManager.monitor(wm, :die)
     Process.exit(pid, :kill)
-    assert_receive {:pocion, {:DOWN, ^monitor_ref, :window, :die}}
+    assert_receive {:pocion, {:DOWN, ^monitor_ref, :window, :die}}, 1000
   end
 end

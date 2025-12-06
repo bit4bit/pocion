@@ -33,4 +33,10 @@ defmodule PocionTest do
     Process.exit(pid, :kill)
     assert_receive {:pocion, {:DOWN, ^monitor_ref, :window, :die}}, 1000
   end
+
+  test "run code on window" do
+    {:ok, w} = Pocion.create_link_window(640, 480, "test1")
+    assert Pocion.call_window(w, fn -> 1 + 1 end) == 2
+    Pocion.close_window(w)
+  end
 end

@@ -2,11 +2,9 @@ defmodule Pocion do
   @moduledoc """
   """
 
-  alias Pocion.WindowManager
-
   defstruct [:root_node, :node, :node_port]
 
-  def create_link_window(manager, link_name, width, height, title) when is_atom(link_name) do
+  def create_link_window(width, height, title) do
     {root_node, domain} = start_root_node()
 
     callback_pid = self_as_callback(node_name(domain))
@@ -15,9 +13,16 @@ defmodule Pocion do
       {:ok, node, node_port} ->
         self = %__MODULE__{node: node, node_port: node_port, root_node: root_node}
         :ok = raylib(self, :init_window, [width, height, title])
-        :ok = WindowManager.register(manager, self, link_name)
-
         {:ok, self}
+    end
+  end
+
+  def call_window(%__MODULE__{node: node}, func) do
+    {remote_pid, remote_ref} = Node.spawn_monitor(node, func)
+    receive do
+
+      {:DOWN, ^remote_ref, :process, ^remote_pid, reason} ->
+        raise inspect(reason)
     end
   end
 
@@ -89,7 +94,11 @@ defmodule Pocion do
 
   defp setup_node({root_pid, root_node}, current_node) do
     quote bind_quoted: [root_pid: root_pid, root_node: root_node, current_node: current_node] do
-      Mix.install([{:raylib, "~> 0.0", path: "../raylib"}])
+      Mix.install([
+        {:raylib, "~> 0.0", path: "../raylib"},
+        {:pocion, "~> 0.0", path: "../pocion"}
+      ])
+
       {:ok, _} = Node.start(current_node, name_domain: :shortnames, hidden: true)
       Process.register(self(), :pocion)
       true = Node.connect(root_node)
@@ -147,56 +156,5 @@ defmodule Pocion do
   defp node_name(domain) do
     name = :crypto.strong_rand_bytes(5) |> Base.encode16()
     String.to_atom("#{name}@#{domain}")
-  end
-end
-
-defmodule Pocion.WindowManager do
-  @moduledoc false
-
-  use GenServer
-
-  def start_link(_) do
-    GenServer.start_link(__MODULE__, [])
-  end
-
-  def register(manager, window, name) do
-    GenServer.call(manager, {:register, window, name})
-  end
-
-  def monitor(manager, name) do
-    GenServer.call(manager, {:monitor, name})
-  end
-
-  @impl true
-  def init(_) do
-    {:ok, %{windows: %{}, monitors: %{}}}
-  end
-
-  @impl true
-  def handle_call({:register, window, name}, _from, state) do
-    state = put_in(state, [:windows, name], window)
-    {:reply, :ok, state}
-  end
-
-  def handle_call({:monitor, name}, from, state) do
-    case Map.get(state, name) do
-      nil ->
-        {:reply, :ok, state}
-
-      window ->
-        monitor_ref = Process.monitor(window.node_port)
-        state = put_in(state, [:monitors, monitor_ref], {from, name})
-        {:reply, monitor_ref, state}
-    end
-  end
-
-  @impl true
-  def handle_info({:DOWN, ref, :process, _, _}, state) do
-    {{reply_to, window_name}, monitors} = Map.pop(state.monitors, ref)
-    windows = Map.delete(state.windows, window_name)
-
-    send(reply_to, {:pocion, {:DOWN, ref, :window, window_name}})
-
-    {:noreply, %{state | windows: windows, monitors: monitors}}
   end
 end

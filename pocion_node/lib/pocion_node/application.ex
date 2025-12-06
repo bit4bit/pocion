@@ -1,4 +1,4 @@
-defmodule RaylibNode.Application do
+defmodule PocionNode.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
@@ -8,13 +8,13 @@ defmodule RaylibNode.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: RaylibNode.Worker.start_link(arg)
-      # {RaylibNode.Worker, arg}
+      # Starts a worker by calling: PocionNode.Worker.start_link(arg)
+      # {PocionNode.Worker, arg}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: RaylibNode.Supervisor]
+    opts = [strategy: :one_for_one, name: PocionNode.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end

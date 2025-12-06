@@ -1,17 +1,13 @@
-defmodule RaylibNode.MixProject do
+defmodule PocionNode.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :raylib_node,
+      app: :pocion_node,
       version: "0.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
-      deps: deps(),
-      aliases: aliases(),
-      elixirc_options: [
-        warnings_as_errors: true
-      ]
+      deps: deps()
     ]
   end
 
@@ -19,18 +15,15 @@ defmodule RaylibNode.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {RaylibNode.Application, []}
+      mod: {PocionNode.Application, []}
     ]
-  end
-
-  defp aliases do
-    [compile: "compile --force --warnings-as-errors"]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:raylib, "~> 0.0", path: "../raylib"}
+      {:raylib, "~> 0.0", path: "../raylib"},
+      {:pocion, "~> 0.0", path: "../pocion"}
     ]
   end
 end

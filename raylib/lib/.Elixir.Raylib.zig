@@ -27,7 +27,7 @@ pub fn begin_drawing() beam.term {
 }
 
 pub fn clear_background(icolor: beam.term) !void {
-ray.ClearBackground(try cast_color(icolor));
+    ray.ClearBackground(try cast_color(icolor));
 }
 
 pub fn end_drawing() beam.term {
@@ -41,7 +41,7 @@ fn cast_color(icolor: beam.term) !ray.Color {
     const zcolor = try beam.get(ColorType, icolor, .{});
     return switch (zcolor) {
         .lightgray => ray.LIGHTGRAY,
-.raywhite => ray.RAYWHITE
+        .raywhite => ray.RAYWHITE,
     };
 }
 
@@ -55,4 +55,3 @@ pub fn close_window() beam.term {
     ray.CloseWindow();
     return beam.make(.ok, .{});
 }
-

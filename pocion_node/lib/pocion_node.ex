@@ -1,6 +1,6 @@
-defmodule RaylibNode do
+defmodule PocionNode do
   @moduledoc """
-  Documentation for `RaylibNode`.
+  Documentation for `PocionNode`.
   """
 
   @doc """
@@ -8,7 +8,7 @@ defmodule RaylibNode do
 
   ## Examples
 
-      iex> RaylibNode.hello()
+      iex> PocionNode.hello()
       :world
 
   """

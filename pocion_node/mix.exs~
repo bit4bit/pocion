@@ -1,9 +1,9 @@
-defmodule RaylibNode.MixProject do
+defmodule PocionNode.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :raylib_node,
+      app: :pocion_node,
       version: "0.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
@@ -15,7 +15,7 @@ defmodule RaylibNode.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {RaylibNode.Application, []}
+      mod: {PocionNode.Application, []}
     ]
   end
 

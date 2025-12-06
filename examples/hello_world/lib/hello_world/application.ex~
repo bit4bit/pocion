@@ -16,8 +16,7 @@ defmodule HelloWorld.Application do
            height: 480,
            title: "Hello World",
            opts: [
-             otp_app: :hello_world,
-             pocion_node_path: "../../pocion_node"
+             otp_app: :hello_world
            ]
          }
        ]},

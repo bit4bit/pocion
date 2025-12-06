@@ -8,6 +8,7 @@ defmodule HelloWorld.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      Supervisor.child_spec(
       {Pocion,
        [
          :hello_world,
@@ -20,6 +21,7 @@ defmodule HelloWorld.Application do
            ]
          }
        ]},
+      id: :hello_world),
       HelloWorld
     ]
 

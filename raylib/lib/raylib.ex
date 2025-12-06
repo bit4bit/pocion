@@ -100,5 +100,40 @@ defmodule Raylib do
       ray.CloseWindow();
       return beam.make(.ok, .{});
   }
+
+  const Operation = struct { op: []const u8, args: beam.term };
+  const OperationType = enum { draw_text, draw_fps, clear_background };
+  const DrawTextArguments = struct { text: beam.term, x: i32, y: i32, font_size: i32, color: beam.term };
+  const DrawFPSArguments = struct { x: i32, y: i32 };
+  const ClearBackgroundArguments = struct { color: beam.term };
+
+  pub fn draw_operations(ops: []Operation) !beam.term {
+      ray.BeginDrawing();
+      for (ops) |op| {
+          const operation = std.meta.stringToEnum(OperationType, op.op) orelse {
+              return error.InvalidChoice;
+          };
+
+          switch (operation) {
+              .draw_text => {
+                  const args = try beam.get(DrawTextArguments, op.args, .{});
+                  const ctext = try ray_string(args.text);
+                  defer beam.allocator.free(ctext[0..std.mem.len(ctext)]);
+
+                  ray.DrawText(ctext, args.x, args.y, args.font_size, try cast_color(args.color));
+              },
+              .draw_fps => {
+                  const args = try beam.get(DrawFPSArguments, op.args, .{});
+                  ray.DrawFPS(args.x, args.y);
+              },
+              .clear_background => {
+                  const args = try beam.get(ClearBackgroundArguments, op.args, .{});
+                  ray.ClearBackground(try cast_color(args.color));
+              },
+          }
+      }
+      ray.EndDrawing();
+      return beam.make(.ok, .{});
+  }
   """
 end

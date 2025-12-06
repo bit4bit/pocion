@@ -9,7 +9,215 @@ const ray = @cImport({
 
 const beam = @import("beam");
 
-pub fn init_window(width: i32, height: i32, title: beam.term) !beam.term {
+const MessageTag = enum {
+    init_window,
+    set_target_fps,
+    window_should_close,
+    begin_drawing,
+    clear_background,
+    end_drawing,
+    draw_text,
+    draw_fps,
+    set_trace_log_level,
+    close_window,
+    stop,
+};
+
+const Message = struct {
+    tag: MessageTag,
+    pid: beam.pid,
+    payload: beam.term,
+};
+
+var render_thread: ?std.Thread = null;
+var message_queue: std.ArrayList(Message) = undefined;
+var queue_mutex: std.Thread.Mutex = .{};
+var running: std.atomic.Value(bool) = std.atomic.Value(bool).init(true);
+
+fn render_loop() void {
+    while (running.load(.monotonic)) {
+        queue_mutex.lock();
+        if (message_queue.items.len > 0) {
+            const msg = message_queue.orderedRemove(0);
+            queue_mutex.unlock();
+
+            process_message(msg) catch |err| {
+                const error_term = beam.make_error_atom(@errorName(err));
+                _ = beam.send(msg.pid, error_term);
+            };
+        } else {
+            queue_mutex.unlock();
+        }
+
+        std.time.sleep(1_000_000);
+    }
+}
+
+fn process_message(msg: Message) !void {
+    switch (msg.tag) {
+        .init_window => {
+            const result = try init_window_impl_from_payload(msg.payload);
+            _ = beam.send(msg.pid, result);
+        },
+        .set_target_fps => {
+            const fps = try beam.get(i32, msg.payload, .{});
+            const result = set_target_fps_impl(fps);
+            _ = beam.send(msg.pid, result);
+        },
+        .window_should_close => {
+            const result = beam.make(.{window_should_close_impl()});
+            _ = beam.send(msg.pid, result);
+        },
+        .begin_drawing => {
+            const result = begin_drawing_impl();
+            _ = beam.send(msg.pid, result);
+        },
+        .clear_background => {
+            clear_background_impl(msg.payload) catch |err| {
+                const error_term = beam.make_error_atom(@errorName(err));
+                _ = beam.send(msg.pid, error_term);
+                return;
+            };
+            _ = beam.send(msg.pid, beam.make(.ok, .{}));
+        },
+        .end_drawing => {
+            const result = end_drawing_impl();
+            _ = beam.send(msg.pid, result);
+        },
+        .draw_text => {
+            const result = try draw_text_impl_from_payload(msg.payload);
+            _ = beam.send(msg.pid, result);
+        },
+        .draw_fps => {
+            const result = try draw_fps_impl_from_payload(msg.payload);
+            _ = beam.send(msg.pid, result);
+        },
+        .set_trace_log_level => {
+            const result = try set_trace_log_level_impl(msg.payload);
+            _ = beam.send(msg.pid, result);
+        },
+        .close_window => {
+            const result = close_window_impl();
+            _ = beam.send(msg.pid, result);
+        },
+        .stop => {
+            running.store(false, .monotonic);
+            _ = beam.send(msg.pid, beam.make(.ok, .{}));
+        },
+    }
+}
+
+pub fn start_render_thread() !beam.term {
+    if (render_thread != null) {
+        return beam.make_error_atom("already_started");
+    }
+
+    message_queue = std.ArrayList(Message){};
+    running.store(true, .monotonic);
+
+    render_thread = try std.Thread.spawn(.{}, render_loop, .{});
+
+    return beam.make(.ok, .{});
+}
+
+pub fn stop_render_thread(caller_pid: beam.pid) !beam.term {
+    queue_mutex.lock();
+    defer queue_mutex.unlock();
+
+    try message_queue.append(beam.allocator, .{
+        .tag = .stop,
+        .pid = caller_pid,
+        .payload = beam.make(.nil, .{}),
+    });
+
+    return beam.make(.ok, .{});
+}
+
+pub fn send_message(tag: MessageTag, caller_pid: beam.pid, payload: beam.term) !beam.term {
+    queue_mutex.lock();
+    defer queue_mutex.unlock();
+
+    try message_queue.append(beam.allocator, .{
+        .tag = tag,
+        .pid = caller_pid,
+        .payload = payload,
+    });
+
+    return beam.make(.ok, .{});
+}
+
+pub fn init_window(caller_pid: beam.pid, width: i32, height: i32, title: beam.term) !beam.term {
+    const payload = beam.make_tuple(&[_]beam.term{ beam.make(width, .{}), beam.make(height, .{}), title }, .{});
+    return send_message(.init_window, caller_pid, payload);
+}
+
+fn init_window_impl_from_payload(payload: beam.term) !beam.term {
+    const tuple_slice = try beam.get_tuple_slice(payload, .{});
+    if (tuple_slice.len != 3) return error.BadArg;
+    const width = try beam.get(i32, tuple_slice[0], .{});
+    const height = try beam.get(i32, tuple_slice[1], .{});
+    const title = tuple_slice[2];
+    return init_window_impl(width, height, title);
+}
+
+pub fn set_target_fps(caller_pid: beam.pid, fps: i32) !beam.term {
+    return send_message(.set_target_fps, caller_pid, beam.make(.{fps}, .{}));
+}
+
+pub fn window_should_close(caller_pid: beam.pid) !beam.term {
+    return send_message(.window_should_close, caller_pid, beam.make(.nil, .{}));
+}
+
+pub fn begin_drawing(caller_pid: beam.pid) !beam.term {
+    return send_message(.begin_drawing, caller_pid, beam.make(.nil, .{}));
+}
+
+pub fn clear_background(caller_pid: beam.pid, color: beam.term) !beam.term {
+    return send_message(.clear_background, caller_pid, color);
+}
+
+pub fn end_drawing(caller_pid: beam.pid) !beam.term {
+    return send_message(.end_drawing, caller_pid, beam.make(.nil, .{}));
+}
+
+pub fn draw_text(caller_pid: beam.pid, text: beam.term, pos_x: i32, pos_y: i32, font_size: i32, color: beam.term) !beam.term {
+    const payload = beam.make_tuple(&[_]beam.term{ text, beam.make(pos_x, .{}), beam.make(pos_y, .{}), beam.make(font_size, .{}), color }, .{});
+    return send_message(.draw_text, caller_pid, payload);
+}
+
+fn draw_text_impl_from_payload(payload: beam.term) !beam.term {
+    const tuple_slice = try beam.get_tuple_slice(payload, .{});
+    if (tuple_slice.len != 5) return error.BadArg;
+    const text = tuple_slice[0];
+    const pos_x = try beam.get(i32, tuple_slice[1], .{});
+    const pos_y = try beam.get(i32, tuple_slice[2], .{});
+    const font_size = try beam.get(i32, tuple_slice[3], .{});
+    const color = tuple_slice[4];
+    return draw_text_impl(text, pos_x, pos_y, font_size, color);
+}
+
+pub fn draw_fps(caller_pid: beam.pid, pos_x: i32, pos_y: i32) !beam.term {
+    const payload = beam.make_tuple(&[_]beam.term{ beam.make(pos_x, .{}), beam.make(pos_y, .{}) }, .{});
+    return send_message(.draw_fps, caller_pid, payload);
+}
+
+fn draw_fps_impl_from_payload(payload: beam.term) !beam.term {
+    const tuple_slice = try beam.get_tuple_slice(payload, .{});
+    if (tuple_slice.len != 2) return error.BadArg;
+    const pos_x = try beam.get(i32, tuple_slice[0], .{});
+    const pos_y = try beam.get(i32, tuple_slice[1], .{});
+    return draw_fps_impl(pos_x, pos_y);
+}
+
+pub fn set_trace_log_level(caller_pid: beam.pid, log_level: beam.term) !beam.term {
+    return send_message(.set_trace_log_level, caller_pid, log_level);
+}
+
+pub fn close_window(caller_pid: beam.pid) !beam.term {
+    return send_message(.close_window, caller_pid, beam.make(.nil, .{}));
+}
+
+fn init_window_impl(width: i32, height: i32, title: beam.term) !beam.term {
     const ctitle = try ray_string(title);
     defer beam.allocator.free(ctitle[0..std.mem.len(ctitle)]);
 
@@ -18,25 +226,25 @@ pub fn init_window(width: i32, height: i32, title: beam.term) !beam.term {
     return beam.make(.ok, .{});
 }
 
-pub fn set_target_fps(fps: i32) beam.term {
+fn set_target_fps_impl(fps: i32) beam.term {
     ray.SetTargetFPS(fps);
     return beam.make(.ok, .{});
 }
 
-pub fn window_should_close() bool {
+fn window_should_close_impl() bool {
     return ray.WindowShouldClose();
 }
 
-pub fn begin_drawing() beam.term {
+fn begin_drawing_impl() beam.term {
     ray.BeginDrawing();
     return beam.make(.ok, .{});
 }
 
-pub fn clear_background(icolor: beam.term) !void {
+fn clear_background_impl(icolor: beam.term) !void {
     ray.ClearBackground(try cast_color(icolor));
 }
 
-pub fn end_drawing() beam.term {
+fn end_drawing_impl() beam.term {
     ray.EndDrawing();
     return beam.make(.ok, .{});
 }
@@ -51,17 +259,15 @@ fn cast_color(icolor: beam.term) !ray.Color {
     };
 }
 
-// hack: [*c]const u8 in signature is not working
 fn ray_string(text: beam.term) ![*c]const u8 {
-    const text_slice = try beam.get([]u8, text, .{});
-    defer beam.allocator.free(text_slice);
+    const text_slice = try beam.get([]const u8, text, .{});
     const null_terminated = try beam.allocator.alloc(u8, text_slice.len + 1);
     @memcpy(null_terminated[0..text_slice.len], text_slice);
     null_terminated[text_slice.len] = 0;
     return null_terminated.ptr;
 }
 
-pub fn draw_text(text: beam.term, pos_x: i32, pos_y: i32, font_size: i32, icolor: beam.term) !beam.term {
+fn draw_text_impl(text: beam.term, pos_x: i32, pos_y: i32, font_size: i32, icolor: beam.term) !beam.term {
     const ctext = try ray_string(text);
     defer beam.allocator.free(ctext[0..std.mem.len(ctext)]);
     ray.DrawText(ctext, pos_x, pos_y, font_size, try cast_color(icolor));
@@ -69,14 +275,14 @@ pub fn draw_text(text: beam.term, pos_x: i32, pos_y: i32, font_size: i32, icolor
     return beam.make(.ok, .{});
 }
 
-pub fn draw_fps(pos_x: i32, pos_y: i32) beam.term {
+fn draw_fps_impl(pos_x: i32, pos_y: i32) beam.term {
     ray.DrawFPS(pos_x, pos_y);
     return beam.make(.ok, .{});
 }
 
 const LogLevelType = enum { log_debug, log_info, log_error };
 
-pub fn set_trace_log_level(ilog_level: beam.term) !beam.term {
+fn set_trace_log_level_impl(ilog_level: beam.term) !beam.term {
     const zlevel = try beam.get(LogLevelType, ilog_level, .{});
     const level = switch (zlevel) {
         .log_info => ray.LOG_INFO,
@@ -89,7 +295,7 @@ pub fn set_trace_log_level(ilog_level: beam.term) !beam.term {
     return beam.make(.ok, .{});
 }
 
-pub fn close_window() beam.term {
+fn close_window_impl() beam.term {
     ray.CloseWindow();
     return beam.make(.ok, .{});
 }

@@ -12,6 +12,11 @@ defmodule Pocion do
     GenServer.call(name, {:call_window, func})
   end
 
+  @spec info(GenServer.server()) :: Pocion.Window.Information.t()
+  def info(name) do
+    GenServer.call(name, :info)
+  end
+
   @impl true
   def init(args) do
     {:ok, w} = Pocion.Window.create_link_window(args.width, args.height, args.title, args.opts)
@@ -24,201 +29,13 @@ defmodule Pocion do
     {:reply, result, w}
   end
 
+  def handle_call(:info, _from, w) do
+    {:reply, Pocion.Window.info(w), w}
+  end
+
   @impl true
   def terminate(_reason, w) do
     Pocion.Window.close_window(w)
     :normal
-  end
-end
-
-defmodule Pocion.Window do
-  @moduledoc false
-
-  defstruct [:root_node, :node, :node_port]
-
-  def create_link_window(width, height, title, opts \\ []) do
-    {root_node, domain} = start_root_node()
-
-    pocion_node_path = Keyword.get(opts, :pocion_node_path, "../pocion_node")
-    otp_app = Keyword.get(opts, :otp_app, Application.get_application(__MODULE__))
-
-    callback_pid = self_as_callback(node_name(domain))
-
-    case start_raylib_node({callback_pid, root_node}, node_name(domain),
-           pocion_node_path: pocion_node_path,
-           app_beams: lookup_app_beams(otp_app)
-         ) do
-      {:ok, node, node_port} ->
-        self = %__MODULE__{node: node, node_port: node_port, root_node: root_node}
-        :ok = raylib(self, :init_window, [width, height, title])
-        {:ok, self}
-    end
-  end
-
-  def call_window(%__MODULE__{node: node}, func) do
-    parent_pid = self()
-    parent_ref = make_ref()
-
-    {remote_pid, remote_ref} =
-      Node.spawn_monitor(node, fn ->
-        result = func.()
-        send(parent_pid, {:reply, parent_ref, result})
-      end)
-
-    receive do
-      {:reply, ^parent_ref, result} ->
-        result
-
-      {:DOWN, ^remote_ref, :process, ^remote_pid, reason} ->
-        raise inspect(reason)
-    after
-      10000 -> exit(:timeout)
-    end
-  end
-
-  def close_window(%__MODULE__{} = self) do
-    :ok = raylib(self, :close_window, [])
-    halt(self)
-  end
-
-  defp self_as_callback(name) do
-    case Process.info(self()) |> Keyword.get(:registered_name) do
-      nil ->
-        Process.register(self(), name)
-        name
-
-      name ->
-        name
-    end
-  end
-
-  defp start_raylib_node(root_node, node, opts) do
-    pocion_node_path = Keyword.fetch!(opts, :pocion_node_path)
-    app_beams = Keyword.fetch!(opts, :app_beams)
-    elixir_path = System.find_executable("elixir")
-
-    args = node_args(setup_node(root_node, node, app_beams))
-
-    port =
-      Port.open({:spawn_executable, elixir_path}, [
-        :stderr_to_stdout,
-        :use_stdio,
-        :binary,
-        cd: pocion_node_path,
-        args: args
-      ])
-
-    wait_node_started(port)
-  end
-
-  defp wait_node_started(port) do
-    port_ref = Port.monitor(port)
-
-    loop = fn loop ->
-      receive do
-        {:node_started, init_ref, node, node_pid} ->
-          IO.puts("node started #{node}")
-          send(node_pid, {:node_initialized, init_ref})
-          {:ok, node, port}
-
-        {^port, {:data, data}} ->
-          IO.puts(data)
-          loop.(loop)
-
-        {:DOWN, ^port_ref, :port, _, reason} ->
-          raise "terminated unexpectedly: #{reason}"
-      after
-        10000 ->
-          raise "fails to start node"
-      end
-    end
-
-    loop.(loop)
-  end
-
-  defp node_args(boot_script) do
-    [
-      "--erl",
-      "-noinput",
-      "--hidden",
-      "-S",
-      "mix",
-      "run",
-      "--eval",
-      "System.argv() |> hd() |> Base.decode64!() |> Code.eval_string()",
-      boot_script
-    ]
-  end
-
-  defp lookup_app_beams(app) do
-    app_dir = Application.app_dir(app)
-    [Path.join(app_dir, "consolidated"), Path.join(app_dir, "ebin")]
-  end
-
-  defp setup_node({root_pid, root_node}, current_node, app_beams) do
-    quote bind_quoted: [
-            root_pid: root_pid,
-            root_node: root_node,
-            current_node: current_node,
-            app_beams: app_beams
-          ] do
-      Code.prepend_paths(app_beams)
-      {:ok, _} = Node.start(current_node, name_domain: :shortnames, hidden: true)
-      Process.register(self(), :pocion)
-      true = Node.connect(root_node)
-      init_ref = make_ref()
-      send({root_pid, root_node}, {:node_started, init_ref, Node.self(), self()})
-      Process.monitor({root_pid, root_node})
-
-      receive do
-        {:node_initialized, ^init_ref} ->
-          :ok
-      after
-        60000 ->
-          IO.puts("timeout can't get response from server #{current_node}")
-          System.halt(1)
-      end
-
-      defmodule RPC do
-        def loop do
-          receive do
-            {:DOWN, _, :process, _, _} ->
-              System.halt()
-
-            :halt ->
-              System.halt()
-          end
-        end
-      end
-
-      RPC.loop()
-    end
-    |> Macro.to_string()
-    |> Base.encode64()
-  end
-
-  defp halt(%__MODULE__{node: node}) do
-    :rpc.call(node, System, :halt, [])
-  end
-
-  defp raylib(%__MODULE__{node: node}, fun, args) do
-    :rpc.call(node, Raylib, fun, args)
-  end
-
-  defp start_root_node() do
-    case Node.start(:pocion, name_domain: :shortnames, hidden: false) do
-      {:ok, _node_pid} ->
-        [_name, domain] = Node.self() |> to_string() |> String.split("@", parts: 2)
-        {Node.self(), domain}
-
-      {:error, {:already_started, _}} ->
-        [_name, domain] = Node.self() |> to_string() |> String.split("@", parts: 2)
-        {Node.self(), domain}
-    end
-  end
-
-  defp node_name(domain) do
-    name = :crypto.strong_rand_bytes(5) |> Base.encode16()
-    String.to_atom("#{name}@#{domain}")
   end
 end

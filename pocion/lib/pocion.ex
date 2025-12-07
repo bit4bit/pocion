@@ -12,6 +12,10 @@ defmodule Pocion do
     GenServer.call(name, {:call_window, func})
   end
 
+  def execute(name, operations) do
+    GenServer.call(name, {:execute, operations})
+  end
+
   @spec info(GenServer.server()) :: Pocion.Window.Information.t()
   def info(name) do
     GenServer.call(name, :info)
@@ -26,6 +30,11 @@ defmodule Pocion do
   @impl true
   def handle_call({:call_window, func}, _from, w) do
     result = Pocion.Window.call_window(w, func)
+    {:reply, result, w}
+  end
+
+  def handle_call({:execute, operations}, _from, w) do
+    result = Pocion.Window.execute(w, operations)
     {:reply, result, w}
   end
 

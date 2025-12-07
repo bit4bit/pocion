@@ -29,20 +29,16 @@ defmodule HelloWorld do
   end
 
   def loop(state) do
-    Pocion.call_window(:hello_world, fn ->
-      Raylib.execute([
-        %{op: :begin_drawing, args: %{}},
-        %{op: :clear_background, args: %{color: :raywhite}},
-        %{op: :draw_fps, args: %{x: 10, y: 10}},
-        %{
-          op: :draw_text,
-          args: %{text: "Hello world!", x: 190, y: state.y, font_size: 20, color: :lightgray}
-        },
-        %{op: :end_drawing, args: %{}}
-      ])
-
-      :done
-    end)
+    Pocion.execute(:hello_world, [
+      %{op: :begin_drawing, args: %{}},
+      %{op: :clear_background, args: %{color: :raywhite}},
+      %{op: :draw_fps, args: %{x: 10, y: 10}},
+      %{
+        op: :draw_text,
+        args: %{text: "Hello world!", x: 190, y: state.y, font_size: 20, color: :lightgray}
+      },
+      %{op: :end_drawing, args: %{}}
+    ])
 
     y_next = state.y + state.y_delta
 

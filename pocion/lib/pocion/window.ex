@@ -29,6 +29,17 @@ defmodule Pocion.Window do
 
   def info(%__MODULE__{info: info}), do: info
 
+  def execute(%__MODULE__{node: node}, operations) do
+    ref = make_ref()
+    send({:raypool, node}, {:execute, ref, self(), operations})
+
+    receive do
+      {:reply, ^ref, result} ->
+        result
+    end
+  end
+
+  # call a function inside the window
   def call_window(%__MODULE__{node: node}, func) do
     parent_pid = self()
     parent_ref = make_ref()
@@ -138,22 +149,11 @@ defmodule Pocion.Window do
             current_node: current_node,
             app_beams: app_beams
           ] do
+      Code.put_compiler_option(:warnings_as_errors, true)
       Code.prepend_paths(app_beams, cache: true)
       {:ok, _} = Node.start(current_node, name_domain: :shortnames, hidden: true)
-      Process.register(self(), :pocion)
       true = Node.connect(root_node)
-      init_ref = make_ref()
-      send({root_pid, root_node}, {:node_started, init_ref, Node.self(), self()})
       Process.monitor({root_pid, root_node})
-
-      receive do
-        {:node_initialized, ^init_ref} ->
-          :ok
-      after
-        60000 ->
-          IO.puts("timeout can't get response from server #{current_node}")
-          System.halt(1)
-      end
 
       defmodule RPC do
         def loop do
@@ -165,6 +165,42 @@ defmodule Pocion.Window do
               System.halt()
           end
         end
+      end
+
+      defmodule RaylibPool do
+        def start_link do
+          :proc_lib.start_link(__MODULE__, :init, [self()])
+        end
+
+        def init(parent) do
+          :proc_lib.init_ack(parent, {:ok, self()})
+          loop()
+        end
+
+        defp loop() do
+          receive do
+            {:execute, execute_ref, reply_pid, operations} ->
+              result = Raylib.execute(operations)
+              send(reply_pid, {:reply, execute_ref, result})
+              loop()
+          end
+        end
+      end
+
+      {:ok, raypool} = RaylibPool.start_link()
+      Process.register(self(), :pocion)
+      Process.register(raypool, :raypool)
+
+      init_ref = make_ref()
+      send({root_pid, root_node}, {:node_started, init_ref, Node.self(), self()})
+
+      receive do
+        {:node_initialized, ^init_ref} ->
+          :ok
+      after
+        60000 ->
+          IO.puts("timeout can't get response from server #{current_node}")
+          System.halt(1)
       end
 
       RPC.loop()

@@ -1,37 +1,47 @@
 defmodule HelloWorld do
-  use GenServer
-
-  def start_link(_) do
-    GenServer.start_link(__MODULE__, :ok, [])
+  def child_spec(opts) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [opts]},
+      type: :worker,
+      restart: :permanent,
+      shutdown: 500
+    }
   end
 
-  @impl true
-  def init(_) do
+  def start_link(_) do
+    :proc_lib.start_link(__MODULE__, :init, [self()])
+  end
+
+  def init(parent) do
     winfo = Pocion.info(:hello_world)
 
     Pocion.call_window(:hello_world, fn ->
       Raylib.set_target_fps(60)
       Raylib.set_trace_log_level(:log_debug)
-      Raylib.begin_drawing()
-      Raylib.clear_background(:raywhite)
-      Raylib.end_drawing()
     end)
 
-    tick()
-    {:ok, %{x: 0, y: 100, y_delta: 1, height: winfo.height}}
+    state = %{x: 0, y: 100, y_delta: 1, height: winfo.height}
+
+    :proc_lib.init_ack(parent, {:ok, self()})
+
+    loop(state)
   end
 
-  @impl true
-  def handle_info(:tick, state) do
-    tick()
-
+  def loop(state) do
     Pocion.call_window(:hello_world, fn ->
-      Raylib.begin_drawing()
-      Raylib.clear_background(:raywhite)
-      Raylib.draw_fps(10, 10)
-      Raylib.draw_text("Hello World!", 190, state.y, 20, :lightgray)
+      Raylib.execute([
+        %{op: :begin_drawing, args: %{}},
+        %{op: :clear_background, args: %{color: :raywhite}},
+        %{op: :draw_fps, args: %{x: 10, y: 10}},
+        %{
+          op: :draw_text,
+          args: %{text: "Hello world!", x: 190, y: state.y, font_size: 20, color: :lightgray}
+        },
+        %{op: :end_drawing, args: %{}}
+      ])
 
-      Raylib.end_drawing()
+      :done
     end)
 
     y_next = state.y + state.y_delta
@@ -43,10 +53,6 @@ defmodule HelloWorld do
         state.y_delta
       end
 
-    {:noreply, %{state | y: y_next, y_delta: y_delta}}
-  end
-
-  defp tick do
-    Process.send_after(self(), :tick, 10)
+    loop(%{state | y: y_next, y_delta: y_delta})
   end
 end

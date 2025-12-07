@@ -6,7 +6,10 @@ defmodule Raylib do
   use Zig,
     otp_app: :raylib,
     leak_check: true,
+    callbacks: [on_load: :load_fn],
     c: [include_dirs: "/usr/local/include", link_lib: {:system, "raylib"}]
+
+  defp __on_load__, do: 0
 
   ~Z"""
   const std = @import("std");
@@ -16,6 +19,18 @@ defmodule Raylib do
   });
 
   const beam = @import("beam");
+  const e = @import("erl_nif");
+
+  const State = struct { sounds: std.AutoHashMap(u32, ray.Sound) };
+
+  // Module callbacks
+  pub fn load_fn(private: ?*?*anyopaque, _: u32) !void {
+      const stored_pointer = try beam.allocator.create(State);
+      stored_pointer.* = .{ .sounds = std.AutoHashMap(u32, ray.Sound).init(beam.allocator) };
+      private.?.* = stored_pointer;
+  }
+
+  // Raylib
 
   pub fn init_window(width: i32, height: i32, title: beam.term) !beam.term {
       const ctitle = try ray_string(title);
@@ -26,6 +41,11 @@ defmodule Raylib do
       return beam.make(.ok, .{});
   }
 
+  pub fn init_audio_device() beam.term {
+      ray.InitAudioDevice();
+      return beam.make(.ok, .{});
+  }
+
   pub fn set_target_fps(fps: i32) beam.term {
       ray.SetTargetFPS(fps);
       return beam.make(.ok, .{});
@@ -33,6 +53,17 @@ defmodule Raylib do
 
   pub fn window_should_close() bool {
       return ray.WindowShouldClose();
+  }
+
+  pub fn load_sound(sound_id: u32, sound_path: beam.term) !beam.term {
+      const zsound_path = try ray_string(sound_path);
+      const sound = ray.LoadSound(zsound_path);
+      if (ray.IsSoundValid(sound)) {
+          try get_priv_state().*.sounds.put(sound_id, sound);
+          return beam.make(.ok, .{});
+      } else {
+          return beam.make(.{ .@"error", .invalid }, .{});
+      }
   }
 
   const ColorType = enum { lightgray, raywhite, lime };
@@ -76,12 +107,13 @@ defmodule Raylib do
   }
 
   const Vector2 = struct { x: f32, y: f32 };
-  const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, draw_circle, draw_circle_v, clear_background };
+  const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, draw_circle, draw_circle_v, play_sound, clear_background };
   const Operation = struct { op: OperationType, args: beam.term };
   const DrawTextArguments = struct { text: beam.term, x: i32, y: i32, font_size: i32, color: beam.term };
   const DrawFPSArguments = struct { x: i32, y: i32 };
   const DrawCircleArguments = struct { x: i32, y: i32, radius: f32, color: beam.term };
   const DrawCircleVArguments = struct { center: Vector2, radius: f32, color: beam.term };
+  const PlaySoundArguments = struct { sound_id: u32 };
   const ClearBackgroundArguments = struct { color: beam.term };
 
   pub fn execute(ops: []Operation) !beam.term {
@@ -110,6 +142,11 @@ defmodule Raylib do
                   const args = try beam.get(DrawFPSArguments, op.args, .{});
                   ray.DrawFPS(args.x, args.y);
               },
+              .play_sound => {
+                  const args = try beam.get(PlaySoundArguments, op.args, .{});
+                  const sound = get_priv_state().*.sounds.get(args.sound_id) orelse unreachable;
+                  ray.PlaySound(sound);
+              },
               .clear_background => {
                   const args = try beam.get(ClearBackgroundArguments, op.args, .{});
                   ray.ClearBackground(try cast_color(args.color));
@@ -118,6 +155,12 @@ defmodule Raylib do
       }
       ray.EndDrawing();
       return beam.make(.ok, .{});
+  }
+
+  fn get_priv_state() *State {
+      const priv_ptr: ?*anyopaque = e.enif_priv_data(beam.context.env);
+      const priv_ptr_state: *State = @ptrCast(@alignCast(priv_ptr.?));
+      return priv_ptr_state;
   }
   """
 end

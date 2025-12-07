@@ -24,7 +24,6 @@ defmodule HelloWorld.Application do
         id: :hello_world
       ),
       HelloWorld,
-
       Supervisor.child_spec(
         {Pocion,
          [
@@ -41,7 +40,7 @@ defmodule HelloWorld.Application do
         id: :bouncy_ball
       ),
       BouncyBall,
-            Supervisor.child_spec(
+      Supervisor.child_spec(
         {Pocion,
          [
            :bouncy_ball_vector2,

@@ -6,7 +6,7 @@ defmodule Raylib do
   use Zig,
     otp_app: :raylib,
     leak_check: true,
-    callbacks: [on_load: :load_fn],
+    callbacks: [on_load: :load_fn, on_unload: :unload_fn],
     c: [include_dirs: "/usr/local/include", link_lib: {:system, "raylib"}]
 
   defp __on_load__, do: 0
@@ -24,10 +24,21 @@ defmodule Raylib do
   const State = struct { sounds: std.AutoHashMap(u32, ray.Sound) };
 
   // Module callbacks
+
   pub fn load_fn(private: ?*?*anyopaque, _: u32) !void {
       const stored_pointer = try beam.allocator.create(State);
       stored_pointer.* = .{ .sounds = std.AutoHashMap(u32, ray.Sound).init(beam.allocator) };
       private.?.* = stored_pointer;
+  }
+
+  pub fn unload_fn(private: ?*anyopaque) void {
+      const priv_ptr_state: *State = @ptrCast(@alignCast(private.?));
+
+      ray.CloseAudioDevice();
+      var sound_it = priv_ptr_state.*.sounds.iterator();
+      while (sound_it.next()) |entry| {
+          ray.UnloadSound(entry.value_ptr.*);
+      }
   }
 
   // Raylib

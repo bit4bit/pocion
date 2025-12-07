@@ -13,10 +13,21 @@ const e = @import("erl_nif");
 const State = struct { sounds: std.AutoHashMap(u32, ray.Sound) };
 
 // Module callbacks
+
 pub fn load_fn(private: ?*?*anyopaque, _: u32) !void {
     const stored_pointer = try beam.allocator.create(State);
     stored_pointer.* = .{ .sounds = std.AutoHashMap(u32, ray.Sound).init(beam.allocator) };
     private.?.* = stored_pointer;
+}
+
+pub fn unload_fn(private: ?*anyopaque) void {
+    const priv_ptr_state: *State = @ptrCast(@alignCast(private.?));
+
+    ray.CloseAudioDevice();
+    var sound_it = priv_ptr_state.*.sounds.iterator();
+    while (sound_it.next()) |entry| {
+        ray.UnloadSound(entry.value_ptr.*);
+    }
 }
 
 // Raylib
@@ -147,7 +158,7 @@ pub fn execute(ops: []Operation) !beam.term {
 }
 
 fn get_priv_state() *State {
-             const priv_ptr: ?*anyopaque = e.enif_priv_data(beam.context.env);
-                const priv_ptr_state: *State = @ptrCast(@alignCast(priv_ptr.?));
-return priv_ptr_state;
+    const priv_ptr: ?*anyopaque = e.enif_priv_data(beam.context.env);
+    const priv_ptr_state: *State = @ptrCast(@alignCast(priv_ptr.?));
+    return priv_ptr_state;
 }

@@ -15,6 +15,7 @@ defmodule RaylibTest do
             op: :draw_text,
             args: %{text: "Hello world!", x: 190, y: state.y, font_size: 20, color: :lightgray}
           },
+          %{op: :draw_circle, args: %{x: 100, y: state.y, radius: 10.3, color: :lightgray}},
           %{op: :end_drawing, args: %{}}
         ])
 

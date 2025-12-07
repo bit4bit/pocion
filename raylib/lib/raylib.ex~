@@ -35,20 +35,6 @@ defmodule Raylib do
       return ray.WindowShouldClose();
   }
 
-  pub fn begin_drawing() beam.term {
-      ray.BeginDrawing();
-      return beam.make(.ok, .{});
-  }
-
-  pub fn clear_background(icolor: beam.term) !void {
-      ray.ClearBackground(try cast_color(icolor));
-  }
-
-  pub fn end_drawing() beam.term {
-      ray.EndDrawing();
-      return beam.make(.ok, .{});
-  }
-
   const ColorType = enum { lightgray, raywhite };
 
   fn cast_color(icolor: beam.term) !ray.Color {
@@ -66,19 +52,6 @@ defmodule Raylib do
       @memcpy(null_terminated[0..text_slice.len], text_slice);
       null_terminated[text_slice.len] = 0;
       return null_terminated.ptr;
-  }
-
-  pub fn draw_text(text: beam.term, pos_x: i32, pos_y: i32, font_size: i32, icolor: beam.term) !beam.term {
-      const ctext = try ray_string(text);
-      defer beam.allocator.free(ctext[0..std.mem.len(ctext)]);
-      ray.DrawText(ctext, pos_x, pos_y, font_size, try cast_color(icolor));
-
-      return beam.make(.ok, .{});
-  }
-
-  pub fn draw_fps(pos_x: i32, pos_y: i32) beam.term {
-      ray.DrawFPS(pos_x, pos_y);
-      return beam.make(.ok, .{});
   }
 
   const LogLevelType = enum { log_debug, log_info, log_error };
@@ -101,20 +74,23 @@ defmodule Raylib do
       return beam.make(.ok, .{});
   }
 
-  const Operation = struct { op: []const u8, args: beam.term };
-  const OperationType = enum { draw_text, draw_fps, clear_background };
+  const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, draw_circle, clear_background };
+  const Operation = struct { op: OperationType, args: beam.term };
   const DrawTextArguments = struct { text: beam.term, x: i32, y: i32, font_size: i32, color: beam.term };
   const DrawFPSArguments = struct { x: i32, y: i32 };
+  const DrawCircleArguments = struct { x: i32, y: i32, radius: f32, color: beam.term };
   const ClearBackgroundArguments = struct { color: beam.term };
 
-  pub fn draw_operations(ops: []Operation) !beam.term {
+  pub fn execute(ops: []Operation) !beam.term {
       ray.BeginDrawing();
       for (ops) |op| {
-          const operation = std.meta.stringToEnum(OperationType, op.op) orelse {
-              return error.InvalidChoice;
-          };
-
-          switch (operation) {
+          switch (op.op) {
+              .begin_drawing => ray.BeginDrawing(),
+              .end_drawing => ray.EndDrawing(),
+              .draw_circle => {
+                  const args = try beam.get(DrawCircleArguments, op.args, .{});
+                  ray.DrawCircle(args.x, args.y, args.radius, try cast_color(args.color));
+              },
               .draw_text => {
                   const args = try beam.get(DrawTextArguments, op.args, .{});
                   const ctext = try ray_string(args.text);

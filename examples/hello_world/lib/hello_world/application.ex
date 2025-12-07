@@ -23,7 +23,24 @@ defmodule HelloWorld.Application do
          ]},
         id: :hello_world
       ),
-      HelloWorld
+      HelloWorld,
+
+      Supervisor.child_spec(
+        {Pocion,
+         [
+           :bouncy_ball,
+           %{
+             width: 640,
+             height: 480,
+             title: "Bouncy Ball",
+             opts: [
+               otp_app: :hello_world
+             ]
+           }
+         ]},
+        id: :bouncy_ball
+      ),
+      BouncyBall
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

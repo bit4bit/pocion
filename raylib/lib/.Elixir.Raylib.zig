@@ -14,7 +14,7 @@ pub fn init_window(width: i32, height: i32, title: beam.term) !beam.term {
     defer beam.allocator.free(ctitle[0..std.mem.len(ctitle)]);
 
     ray.InitWindow(width, height, ctitle);
-
+ray.SetConfigFlags(ray.FLAG_MSAA_4X_HINT);
     return beam.make(.ok, .{});
 }
 
@@ -66,18 +66,29 @@ pub fn close_window() beam.term {
     return beam.make(.ok, .{});
 }
 
-const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, clear_background };
+const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, draw_circle, clear_background };
 const Operation = struct { op: OperationType, args: beam.term };
 const DrawTextArguments = struct { text: beam.term, x: i32, y: i32, font_size: i32, color: beam.term };
 const DrawFPSArguments = struct { x: i32, y: i32 };
+const DrawCircleArguments = struct { x: i32, y: i32, radius: f32, color: beam.term, apply_delta_time: f32 = 0.0 };
 const ClearBackgroundArguments = struct { color: beam.term };
 
 pub fn execute(ops: []Operation) !beam.term {
     ray.BeginDrawing();
+const dt = ray.GetFrameTime();
     for (ops) |op| {
         switch (op.op) {
             .begin_drawing => ray.BeginDrawing(),
             .end_drawing => ray.EndDrawing(),
+            .draw_circle => {
+
+                const args = try beam.get(DrawCircleArguments, op.args, .{});
+const dx = args.apply_delta_time * dt;
+const dy = args.apply_delta_time * dt;
+const x: f32 =  @as(f32, @floatFromInt(args.x)) + dx;
+const y: f32 =  @as(f32, @floatFromInt(args.y)) + dy;
+                ray.DrawCircle(@intFromFloat(x), @intFromFloat(y), args.radius, try cast_color(args.color));
+            },
             .draw_text => {
                 const args = try beam.get(DrawTextArguments, op.args, .{});
                 const ctext = try ray_string(args.text);

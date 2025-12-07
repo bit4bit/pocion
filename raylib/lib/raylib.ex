@@ -20,7 +20,7 @@ defmodule Raylib do
   pub fn init_window(width: i32, height: i32, title: beam.term) !beam.term {
       const ctitle = try ray_string(title);
       defer beam.allocator.free(ctitle[0..std.mem.len(ctitle)]);
-
+      ray.SetConfigFlags(ray.FLAG_MSAA_4X_HINT);
       ray.InitWindow(width, height, ctitle);
 
       return beam.make(.ok, .{});
@@ -35,13 +35,14 @@ defmodule Raylib do
       return ray.WindowShouldClose();
   }
 
-  const ColorType = enum { lightgray, raywhite };
+  const ColorType = enum { lightgray, raywhite, lime };
 
   fn cast_color(icolor: beam.term) !ray.Color {
       const zcolor = try beam.get(ColorType, icolor, .{});
       return switch (zcolor) {
           .lightgray => ray.LIGHTGRAY,
           .raywhite => ray.RAYWHITE,
+          .lime => ray.LIME,
       };
   }
 
@@ -74,27 +75,29 @@ defmodule Raylib do
       return beam.make(.ok, .{});
   }
 
-  const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, draw_circle, clear_background };
+  const Vector2 = struct { x: f32, y: f32 };
+  const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, draw_circle, draw_circle_v, clear_background };
   const Operation = struct { op: OperationType, args: beam.term };
   const DrawTextArguments = struct { text: beam.term, x: i32, y: i32, font_size: i32, color: beam.term };
   const DrawFPSArguments = struct { x: i32, y: i32 };
-  const DrawCircleArguments = struct { x: i32, y: i32, radius: f32, color: beam.term, apply_delta_time: f32 = 0.0 };
+  const DrawCircleArguments = struct { x: i32, y: i32, radius: f32, color: beam.term };
+  const DrawCircleVArguments = struct { center: Vector2, radius: f32, color: beam.term };
   const ClearBackgroundArguments = struct { color: beam.term };
 
   pub fn execute(ops: []Operation) !beam.term {
       ray.BeginDrawing();
-      const dt = ray.GetFrameTime();
+
       for (ops) |op| {
           switch (op.op) {
               .begin_drawing => ray.BeginDrawing(),
               .end_drawing => ray.EndDrawing(),
+              .draw_circle_v => {
+                  const args = try beam.get(DrawCircleVArguments, op.args, .{});
+                  ray.DrawCircleV(ray.Vector2{ .x = args.center.x, .y = args.center.y }, args.radius, try cast_color(args.color));
+              },
               .draw_circle => {
                   const args = try beam.get(DrawCircleArguments, op.args, .{});
-                  const dx = args.apply_delta_time * dt;
-                  const dy = args.apply_delta_time * dt;
-                  const x: f32 = @as(f32, @floatFromInt(args.x)) + dx;
-                  const y: f32 = @as(f32, @floatFromInt(args.y)) + dy;
-                  ray.DrawCircle(@intFromFloat(x), @intFromFloat(y), args.radius, try cast_color(args.color));
+                  ray.DrawCircle(args.x, args.y, args.radius, try cast_color(args.color));
               },
               .draw_text => {
                   const args = try beam.get(DrawTextArguments, op.args, .{});

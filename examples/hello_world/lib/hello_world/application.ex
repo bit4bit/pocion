@@ -40,7 +40,23 @@ defmodule HelloWorld.Application do
          ]},
         id: :bouncy_ball
       ),
-      BouncyBall
+      BouncyBall,
+            Supervisor.child_spec(
+        {Pocion,
+         [
+           :bouncy_ball_vector2,
+           %{
+             width: 800,
+             height: 450,
+             title: "Bouncy Ball Vector2",
+             opts: [
+               otp_app: :hello_world
+             ]
+           }
+         ]},
+        id: :bouncy_ball_vector2
+      ),
+      BouncyBallVector2
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -20,6 +20,11 @@ and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/raylib>.
 
 
+## Input tests
+
+* [X] direct call `IsKeyPressed` lag
+* [X] reply as message lag
+
 ## Resources
 
 * https://www.raylib.com/cheatsheet/cheatsheet.html

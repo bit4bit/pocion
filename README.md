@@ -1,5 +1,9 @@
 <!-- LLM-Assisted -->
+
+
 # Pocion
+
+**!! Experimental**
 
 A videogame library for Elixir built on top of Raylib, providing an ergonomic OTP-based API for creating games and graphical applications.
 

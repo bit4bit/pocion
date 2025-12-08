@@ -125,7 +125,7 @@ defmodule Pocion.Window do
   defp node_args(boot_script) do
     [
       "--erl",
-      "+sbwt very_short +sbwtdcpu very_short +sbwtdio very_short -secio true --disable-jit -noinput",
+      "+sbwt very_short +sbwtdcpu very_short +sbwtdio very_short -secio true +K true +sbt db +A 64 +S 16 --disable-jit -noinput",
       "--hidden",
       "--eval",
       "System.argv() |> hd() |> Base.decode64!() |> Code.eval_string()",

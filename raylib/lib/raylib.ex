@@ -77,6 +77,21 @@ defmodule Raylib do
       }
   }
 
+  const KeyType = enum { KEY_G };
+
+  pub fn is_key_pressed(ikey: beam.term) !bool {
+      const zkey = try beam.get(KeyType, ikey, .{});
+      const key = switch (zkey) {
+          .KEY_G => ray.KEY_G,
+      };
+      const pressed = ray.IsKeyPressed(key);
+
+      if (pressed) {
+          std.log.info("KEY PRESSED", .{});
+      }
+      return pressed;
+  }
+
   const ColorType = enum { lightgray, raywhite, lime };
 
   fn cast_color(icolor: beam.term) !ray.Color {
@@ -118,12 +133,13 @@ defmodule Raylib do
   }
 
   const Vector2 = struct { x: f32, y: f32 };
-  const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, draw_circle, draw_circle_v, play_sound, clear_background };
+  const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, draw_circle, draw_circle_v, play_sound, clear_background, is_key_pressed };
   const Operation = struct { op: OperationType, args: beam.term };
   const DrawTextArguments = struct { text: beam.term, x: i32, y: i32, font_size: i32, color: beam.term };
   const DrawFPSArguments = struct { x: i32, y: i32 };
   const DrawCircleArguments = struct { x: i32, y: i32, radius: f32, color: beam.term };
   const DrawCircleVArguments = struct { center: Vector2, radius: f32, color: beam.term };
+  const IsKeyPressedArguments = struct { key: KeyType, reply_pid: beam.pid };
   const PlaySoundArguments = struct { sound_id: u32 };
   const ClearBackgroundArguments = struct { color: beam.term };
 
@@ -132,6 +148,17 @@ defmodule Raylib do
 
       for (ops) |op| {
           switch (op.op) {
+              .is_key_pressed => {
+                  const args = try beam.get(IsKeyPressedArguments, op.args, .{});
+                  const key = switch (args.key) {
+                      .KEY_G => ray.KEY_G,
+                  };
+                  const pressed = ray.IsKeyPressed(key);
+                  if (pressed) {
+                      std.log.info("KEY PRESSED", .{});
+                  }
+                  try beam.send(args.reply_pid, .{ .is_key_pressed, pressed }, .{});
+              },
               .begin_drawing => ray.BeginDrawing(),
               .end_drawing => ray.EndDrawing(),
               .draw_circle_v => {

@@ -99,7 +99,7 @@ defmodule Raylib do
       }
   }
 
-  const ColorType = enum { lightgray, raywhite, lime };
+  const ColorType = enum { lightgray, raywhite, lime, blue };
 
   fn cast_color(icolor: beam.term) !ray.Color {
       const zcolor = try beam.get(ColorType, icolor, .{});
@@ -107,6 +107,7 @@ defmodule Raylib do
           .lightgray => ray.LIGHTGRAY,
           .raywhite => ray.RAYWHITE,
           .lime => ray.LIME,
+          .blue => ray.BLUE,
       };
   }
 
@@ -123,7 +124,7 @@ defmodule Raylib do
   fn ray_key(key: KeyType) i32 {
       return switch (key) {
           .KEY_G => ray.KEY_G,
-          .KEY_H => KEY_H,
+          .KEY_H => ray.KEY_H,
           .KEY_RIGHT => ray.KEY_RIGHT,
           .KEY_LEFT => ray.KEY_LEFT,
           .KEY_UP => ray.KEY_UP,
@@ -162,7 +163,8 @@ defmodule Raylib do
   const DrawFPSArguments = struct { x: i32, y: i32 };
   const DrawCircleArguments = struct { x: i32, y: i32, radius: f32, color: beam.term };
   const DrawCircleVArguments = struct { center: Vector2, radius: f32, color: beam.term };
-  const IsKeyPressedArguments = struct { key: KeyType, reply_pid: beam.pid };
+  const DrawRectangleArguments = struct { x: i32, y: i32, width: i32, height: 32, color: beam.term };
+  const IsKeyPressedArguments = struct { key: KeyType, reply_pid: beam.pid, repeat: bool = false, release: bool = false };
   const PlaySoundArguments = struct { sound_id: u32 };
   const ClearBackgroundArguments = struct { color: beam.term };
   const WaitTimeArguments = struct { time: f64 };
@@ -177,9 +179,16 @@ defmodule Raylib do
               .is_key_pressed => {
                   const args = try beam.get(IsKeyPressedArguments, op.args, .{});
                   const key = ray_key(args.key);
-                  const pressed = ray.IsKeyPressed(key);
-                  if (pressed) {
-                      try beam.send(args.reply_pid, .{ .is_key_pressed, pressed }, .{});
+
+                  var pressed = ray.IsKeyPressed(key);
+                  if (args.repeat and pressed == false) {
+                      pressed = ray.IsKeyPressedRepeat(key);
+                  }
+
+                  if (args.release and ray.IsKeyReleased(key)) {
+                      try beam.send(args.reply_pid, .{ .is_key_released, args.key }, .{});
+                  } else if (pressed) {
+                      try beam.send(args.reply_pid, .{ .is_key_pressed, args.key }, .{});
                   }
               },
               .begin_drawing => ray.BeginDrawing(),

@@ -33,6 +33,7 @@ defmodule HelloWorld.Application do
              height: 480,
              title: "Bouncy Ball",
              opts: [
+               :audio,
                otp_app: :hello_world
              ]
            }
@@ -49,6 +50,7 @@ defmodule HelloWorld.Application do
              height: 450,
              title: "Bouncy Ball Vector2",
              opts: [
+               :audio,
                otp_app: :hello_world
              ]
            }

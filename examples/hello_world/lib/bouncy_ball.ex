@@ -17,7 +17,6 @@ defmodule BouncyBall do
     winfo = Pocion.info(:bouncy_ball)
 
     Pocion.call_window(:bouncy_ball, fn ->
-      Raylib.init_audio_device()
       Raylib.set_target_fps(60)
       Raylib.set_trace_log_level(:log_debug)
       Raylib.load_sound(1, "./priv/bounce-effect.ogg")
@@ -81,6 +80,7 @@ defmodule BouncyBall do
       end
 
     Pocion.execute(:bouncy_ball, operations)
+
     Pocion.call_window(:bouncy_ball, fn ->
       Raylib.wait_target_fps()
     end)
@@ -111,7 +111,6 @@ defmodule BouncyBallVector2 do
     winfo = Pocion.info(:bouncy_ball_vector2)
 
     Pocion.call_window(:bouncy_ball_vector2, fn ->
-      Raylib.init_audio_device()
       Raylib.set_target_fps(60)
       Raylib.set_trace_log_level(:log_debug)
       Raylib.load_sound(1, "./priv/bounce-effect.ogg")

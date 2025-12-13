@@ -12,7 +12,8 @@ defmodule Pocion.Window do
   def create_link_window(width, height, title, opts \\ []) do
     {root_node, domain} = start_root_node()
 
-    otp_app = Keyword.get(opts, :otp_app, Application.get_application(__MODULE__))
+    {pocion_opts, window_opts} = :proplists.split(opts, [:otp_app])
+    otp_app = Keyword.get(List.flatten(pocion_opts), :otp_app, Application.get_application(__MODULE__))
 
     callback_pid = self_as_callback(node_name(domain))
 
@@ -22,7 +23,7 @@ defmodule Pocion.Window do
       {:ok, node, node_port} ->
         info = %Information{width: width, height: height, title: title}
         self = %__MODULE__{node: node, node_port: node_port, root_node: root_node, info: info}
-        :ok = raylib(self, :init_window, [width, height, title])
+        :ok = raylib(self, :init_window, [width, height, title, window_opts])
         {:ok, self}
     end
   end

@@ -46,23 +46,25 @@ defmodule Raylib do
 
   // Raylib
 
-  pub fn init_window(width: i32, height: i32, title: beam.term) !beam.term {
+  const WindowOption = enum { audio };
+
+  pub fn init_window(width: i32, height: i32, title: beam.term, options: beam.term) !beam.term {
+      const woptions = try beam.get([]WindowOption, options, .{});
       const ctitle = try ray_string(title);
       defer beam.allocator.free(ctitle[0..std.mem.len(ctitle)]);
       ray.SetConfigFlags(ray.FLAG_MSAA_4X_HINT);
       ray.InitWindow(width, height, ctitle);
+      for (woptions) |option| {
+          switch (option) {
+              .audio => ray.InitAudioDevice(),
+          }
+      }
       engine_previous_time = ray.GetTime();
       return beam.make(.ok, .{});
   }
 
   pub fn set_target_fps(fps: i32) beam.term {
-  engine_target_FPS = @floatFromInt(fps);
-  return beam.make(.ok, .{});
-  }
-
-  // TODO: move to init_window option
-  pub fn init_audio_device() beam.term {
-      ray.InitAudioDevice();
+      engine_target_FPS = @floatFromInt(fps);
       return beam.make(.ok, .{});
   }
 
@@ -190,9 +192,11 @@ defmodule Raylib do
                   ray.DrawFPS(args.x, args.y);
               },
               .play_sound => {
-                  const args = try beam.get(PlaySoundArguments, op.args, .{});
-                  const sound = get_priv_state().*.sounds.get(args.sound_id) orelse unreachable;
-                  ray.PlaySound(sound);
+                  if (ray.IsAudioDeviceReady()) {
+                      const args = try beam.get(PlaySoundArguments, op.args, .{});
+                      const sound = get_priv_state().*.sounds.get(args.sound_id) orelse unreachable;
+                      ray.PlaySound(sound);
+                  }
               },
               .clear_background => {
                   const args = try beam.get(ClearBackgroundArguments, op.args, .{});

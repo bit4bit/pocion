@@ -8,9 +8,10 @@ defmodule PingPong.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {Pocion, [:ping_pong, %{width: 640, height: 480, title: "Ping Pong", opts: [otp_app: :ping_pong]}]}
+      {Pocion,
+       [:main, %{width: 640, height: 480, title: "Ping Pong", opts: [otp_app: :ping_pong]}]},
+      PingPong
     ]
-
 
     opts = [strategy: :one_for_one, name: PingPong.Supervisor]
     Supervisor.start_link(children, opts)

@@ -9,7 +9,10 @@ defmodule PingPong.Application do
   def start(_type, _args) do
     children = [
       {Pocion,
-       [:main, %{width: 640, height: 480, title: "Ping Pong", opts: [otp_app: :ping_pong]}]},
+       [
+         :main,
+         %{width: 640, height: 480, title: "Ping Pong", opts: [:audio, otp_app: :ping_pong]}
+       ]},
       PingPong
     ]
 

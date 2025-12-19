@@ -1,10 +1,11 @@
 defmodule PingPong do
   @moduledoc false
+  alias PingPong.Ball
 
   defmodule State do
     use PrivateModule
 
-    defstruct [:ball_pid, :winfo]
+    defstruct [:ball, :winfo]
   end
 
   @snd_bounce 1
@@ -26,14 +27,8 @@ defmodule PingPong do
   def init(parent) do
     winfo = Pocion.info(:main)
 
-    {:ok, ball_pid} =
-      PingPong.Ball.start_link(%{
-        x: 100,
-        y: 100,
-        speed: 5.0,
-        radius: 10.0,
-        sound_bounce: @snd_bounce
-      })
+    ball =
+      PingPong.Ball.new(%{x: 100, y: 100, speed: 5.0, radius: 10.0, bounce_sound_id: @snd_bounce})
 
     Pocion.call_window(:main, fn ->
       Raylib.set_target_fps(60)
@@ -41,7 +36,7 @@ defmodule PingPong do
       Raylib.load_sound(@snd_bounce, "./priv/bounce-effect.ogg")
     end)
 
-    state = %State{ball_pid: ball_pid, winfo: winfo}
+    state = %State{ball: ball, winfo: winfo}
 
     :proc_lib.init_ack(parent, {:ok, self()})
 
@@ -71,9 +66,9 @@ defmodule PingPong do
       %{op: :end_drawing, args: %{}}
     ]
 
-    env_ref = make_ref()
-    ball_operations = GenServer.call(state.ball_pid, {:update, env_ref, self(), env})
-    operations = init_operations ++ main_operations ++ ball_operations ++ end_operations
+    {operations, state} = logic(env, state)
+
+    operations = init_operations ++ main_operations ++ operations ++ end_operations
 
     Pocion.execute(:main, operations)
 
@@ -81,13 +76,29 @@ defmodule PingPong do
       Raylib.wait_target_fps()
     end)
 
-    receive do
-      {:collision, ^env_ref} ->
-        IO.puts("Collision")
-    after
-      0 -> :ok
-    end
-
     loop(state)
+  end
+
+  defp logic(env, state) do
+    {ball, ball_changes} =
+      Ball.update(state.ball, env, fn ball, changes ->
+        collision_state = collision({:ball, ball, :env, env})
+        Ball.bounce(ball, env, collision_state, changes)
+      end)
+
+    {Ball.render(ball, env, ball_changes), %{state | ball: ball}}
+  end
+
+  defp collision({:ball, ball, :env, env}) do
+    dist_vertical_walls = min(ball.position.y, env.wall.height - ball.position.y)
+    dist_horizontal_walls = min(ball.position.x, env.wall.width - ball.position.x)
+
+    speed_x_changed? = dist_horizontal_walls <= ball.radius
+    speed_y_changed? = dist_vertical_walls <= ball.radius
+
+    %{
+      speed_x_changed?: speed_x_changed?,
+      speed_y_changed?: speed_y_changed?
+    }
   end
 end

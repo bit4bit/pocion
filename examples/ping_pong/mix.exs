@@ -4,6 +4,7 @@ defmodule PingPong.MixProject do
   def project do
     [
       app: :ping_pong,
+      compilers: [:private_module] ++ Mix.compilers(),
       version: "0.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,

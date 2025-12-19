@@ -1,30 +1,44 @@
 defmodule PingPong.Ball do
-  @moduledoc false
-
-  use GenServer
-
-  def start_link(%{x: x, y: y, speed: speed, radius: radius, sound_bounce: sound_bounce}) do
-    GenServer.start_link(
-      __MODULE__,
-      %{x: x, y: y, speed: speed, radius: radius, sound_bounce: sound_bounce},
-      []
-    )
+  defmodule State do
+    use PrivateModule
+    defstruct [:position, :speed, :radius, :gravity, :bounce_sound_id]
   end
 
-  @impl true
-  def init(%{x: x, y: y, speed: speed, radius: radius, sound_bounce: sound_bounce}) do
-    position = %{x: x, y: y}
-    speed = %{x: speed, y: speed}
-
-    {:ok,
-     %{position: position, speed: speed, radius: radius, gravity: 0.0, sound_bounce: sound_bounce}}
+  def new(%{x: x, y: y, speed: speed, radius: radius, bounce_sound_id: bounce_sound_id}) do
+    %State{
+      position: %{x: x, y: y},
+      speed: %{x: speed, y: speed},
+      radius: radius,
+      gravity: 0.0,
+      bounce_sound_id: bounce_sound_id
+    }
   end
 
-  @impl true
-  def handle_call({:update, env_ref, env_pid, %{wall: _, gravity: _} = env}, _from, state) do
+  def update(%State{} = state, env, fun) do
     {state, changes} = next_state(env, state)
+    {state, changes} = fun.(state, changes)
+    {state, changes}
+  end
 
-    operations = [
+  def bounce(%State{} = state, _env, collision_state, changes) do
+    speed_x =
+      if(collision_state.speed_x_changed?,
+        do: state.speed.x * -1.0,
+        else: state.speed.x
+      )
+
+    speed_y =
+      if(collision_state.speed_y_changed?,
+        do: state.speed.y * -1.0,
+        else: state.speed.y
+      )
+
+    bounce? = collision_state.speed_x_changed? || collision_state.speed_y_changed?
+    {%{state | speed: %{x: speed_x, y: speed_y}}, Map.put(changes, :bounce?, bounce?)}
+  end
+
+  def render(%State{} = state, _env, changes) do
+    [
       %{
         op: :draw_circle_v,
         args: %{
@@ -34,40 +48,26 @@ defmodule PingPong.Ball do
         }
       }
     ]
-
-    operations =
-      if(changes.speed?,
-        do: operations ++ [%{op: :play_sound, args: %{sound_id: state.sound_bounce}}],
-        else: operations
-      )
-
-    if changes.speed? do
-      send(env_pid, {:collision, env_ref})
-    end
-
-    {:reply, operations, state}
+    |> then(fn ops ->
+      if changes.bounce? do
+        ops ++
+          [
+            %{
+              op: :play_sound,
+              args: %{sound_id: state.bounce_sound_id}
+            }
+          ]
+      else
+        ops
+      end
+    end)
   end
 
   defp next_state(env, state) do
     speed = state.speed
     position = %{x: state.position.x + speed.x, y: state.position.y + speed.y + state.gravity}
-    dist_vertical_walls = min(position.y, env.wall.height - position.y)
-    dist_horizontal_walls = min(position.x, env.wall.width - position.x)
+    new_state = %{state | position: position, gravity: env.gravity}
 
-    {speed_x, speed_x_changed?} =
-      if(dist_horizontal_walls <= state.radius,
-        do: {speed.x * -1.0, true},
-        else: {speed.x, false}
-      )
-
-    {speed_y, speed_y_changed?} =
-      if(dist_vertical_walls <= state.radius, do: {speed.y * -1.0, true}, else: {speed.y, false})
-
-    speed = %{x: speed_x, y: speed_y}
-
-    new_state = %{state | position: position, speed: speed, gravity: env.gravity}
-    changes = %{speed?: speed_x_changed? or speed_y_changed?}
-
-    {new_state, changes}
+    {new_state, %{}}
   end
 end

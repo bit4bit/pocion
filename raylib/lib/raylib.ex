@@ -156,14 +156,20 @@ defmodule Raylib do
       return beam.make(.ok, .{});
   }
 
+  // error: error: evaluation exceeded 2000 backwards branches
+  // soluciones intentadas:
+  // - operation.op como beam.term (fallo)
+  // - uso de union para separar por grupos los tipos (fallo)
+  // - uso propiedad nif: [execute: [spec: false, doc: false]] (fallo)
+
   const Vector2 = struct { x: f32, y: f32 };
-  const OperationType = enum { begin_drawing, end_drawing, draw_text, draw_fps, draw_circle, draw_circle_v, play_sound, clear_background, is_key_pressed, wait_time, swap_screen_buffer, poll_input_events };
+  const OperationType = enum { begin_drawing, end_drawing, draw_rectangle, draw_text, draw_fps, draw_circle, draw_circle_v, play_sound, clear_background, is_key_pressed, wait_time, swap_screen_buffer, poll_input_events };
   const Operation = struct { op: OperationType, args: beam.term };
   const DrawTextArguments = struct { text: beam.term, x: i32, y: i32, font_size: i32, color: beam.term };
   const DrawFPSArguments = struct { x: i32, y: i32 };
   const DrawCircleArguments = struct { x: i32, y: i32, radius: f32, color: beam.term };
   const DrawCircleVArguments = struct { center: Vector2, radius: f32, color: beam.term };
-  const DrawRectangleArguments = struct { x: i32, y: i32, width: i32, height: 32, color: beam.term };
+  const DrawRectangleArguments = struct { x: i32, y: i32, width: i32, height: i32, color: beam.term };
   const IsKeyPressedArguments = struct { key: KeyType, reply_pid: beam.pid, repeat: bool = false, release: bool = false };
   const PlaySoundArguments = struct { sound_id: u32 };
   const ClearBackgroundArguments = struct { color: beam.term };

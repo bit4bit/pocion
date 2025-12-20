@@ -39,9 +39,9 @@ defmodule PingPong.Ball do
 
   def render(%State{} = state, _env, changes) do
     [
-      %{
-        op: :draw_circle_v,
-        args: %{
+      {
+        :draw_circle_v,
+        %{
           center: %{x: state.position.x, y: state.position.y},
           radius: state.radius,
           color: :lime
@@ -50,13 +50,7 @@ defmodule PingPong.Ball do
     ]
     |> then(fn ops ->
       if changes.bounce? do
-        ops ++
-          [
-            %{
-              op: :play_sound,
-              args: %{sound_id: state.bounce_sound_id}
-            }
-          ]
+        ops ++ [{:play_sound, %{sound_id: state.bounce_sound_id}}]
       else
         ops
       end

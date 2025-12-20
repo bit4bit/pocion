@@ -6,7 +6,7 @@ defmodule PingPong do
   defmodule State do
     use PrivateModule
 
-    defstruct [:ball, :player, :winfo]
+    defstruct [:ball, :player, :operations, :winfo]
   end
 
   @snd_bounce 1
@@ -40,11 +40,20 @@ defmodule PingPong do
       Raylib.load_sound(@snd_bounce, "./priv/bounce-effect.ogg")
     end)
 
-    state = %State{ball: ball, player: player, winfo: winfo}
+    state = %State{ball: ball, player: player, winfo: winfo, operations: []}
 
     :proc_lib.init_ack(parent, {:ok, self()})
 
     loop(state)
+  end
+
+  defp add_op(state, {op, args}) do
+    %{state | operations: state.operations ++ [%{op: op, args: args}]}
+  end
+
+  defp flush_operations(state) do
+    operations = state.operations
+    {operations, %{state | operations: []}}
   end
 
   def loop(state) do
@@ -54,36 +63,35 @@ defmodule PingPong do
       wall: %{x: 0, y: 0, width: state.winfo.width, height: state.winfo.height}
     }
 
-    init_operations = [
-      %{op: :begin_drawing, args: %{}},
-      %{op: :clear_background, args: %{color: :raywhite}}
-    ]
+    state
+    |> add_op({:begin_drawing, %{}})
+    |> add_op({:clear_background, %{color: :raywhite}})
+    |> add_op(
+      {:draw_text, %{text: "Ping Pong in progress!!", x: 50, y: 200, font_size: 20, color: :lime}}
+    )
+    |> add_op({:end_drawing, %{}})
+    |> logic(env)
+    |> draw()
+    |> wait_fps()
+    |> loop()
+  end
 
-    main_operations = [
-      %{
-        op: :draw_text,
-        args: %{text: "Ping Pong in progress!!", x: 50, y: 200, font_size: 20, color: :lime}
-      }
-    ]
-
-    end_operations = [
-      %{op: :end_drawing, args: %{}}
-    ]
-
-    {operations, state} = logic(env, state)
-
-    operations = init_operations ++ main_operations ++ operations ++ end_operations
-
+  defp draw(state) do
+    {operations, state} = flush_operations(state)
     Pocion.execute(:main, operations)
 
+    state
+  end
+
+  defp wait_fps(state) do
     Pocion.call_window(:main, fn ->
       Raylib.wait_target_fps()
     end)
 
-    loop(state)
+    state
   end
 
-  defp logic(env, state) do
+  defp logic(state, env) do
     {ball, ball_changes} =
       Ball.update(state.ball, env, fn ball, changes ->
         collision_state = collision({:ball, ball, :env, env})
@@ -97,7 +105,13 @@ defmodule PingPong do
 
     player_operations = Racket.render(player, env, player_changes)
 
-    {ball_operations ++ player_operations, %{state | ball: ball, player: player}}
+    Enum.reduce(
+      ball_operations ++ player_operations,
+      %{state | ball: ball, player: player},
+      fn op, state ->
+        add_op(state, op)
+      end
+    )
   end
 
   defp collision({:ball, ball, :env, env}) do

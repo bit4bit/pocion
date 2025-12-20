@@ -82,12 +82,10 @@ defmodule PingPong do
     }
 
     state
-    |> add_op({:begin_drawing, %{}})
     |> add_op({:clear_background, %{color: :raywhite}})
     |> add_op(
       {:draw_text, %{text: "Ping Pong in progress!!", x: 50, y: 200, font_size: 20, color: :lime}}
     )
-    |> add_op({:end_drawing, %{}})
     |> logic(env)
     |> draw()
     |> wait_fps()
@@ -100,6 +98,9 @@ defmodule PingPong do
       |> add_ops(Ball.render(state.ball))
       |> add_ops(Racket.render(state.player))
       |> flush_operations()
+
+    operations =
+      [%{op: :begin_drawing, args: %{}}] ++ operations ++ [%{op: :end_drawing, args: %{}}]
 
     Pocion.execute(:main, operations)
 
